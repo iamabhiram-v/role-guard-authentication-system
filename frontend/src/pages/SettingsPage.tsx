@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { AppDispatch, RootState } from '../store';
 import { deleteAccount, fetchProfile } from '../store/slices/profileSlice';
 import { Layout } from '../components/Layout';
-import '../styles/profile.css';
 import '../styles/SettingsPage.css';
 
 const ShieldIcon = () => (
