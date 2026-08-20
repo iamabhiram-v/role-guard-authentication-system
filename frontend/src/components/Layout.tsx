@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Sidebar } from './Sidebar';
+import { NotificationBell } from './NotificationBell';
+import { AnnouncementBanner } from './AnnouncementBanner';
 import '../styles/dashboard.css';
 
 interface LayoutProps {
@@ -30,17 +32,22 @@ export const Layout: React.FC<LayoutProps> = ({ title, children }) => {
         className="dashboard-main"
         style={{ height: '100vh', overflowY: 'auto' }}
       >
-        <div className="dashboard-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <button
-              className="mobile-menu-btn"
-              onClick={() => setSidebarOpen(true)}
-              aria-label="Open menu"
-            >
-              <MenuIcon />
-            </button>
-            <h1 style={{ fontSize: '1.5rem', fontWeight: 800 }}>{title}</h1>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div className="dashboard-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <button
+                className="mobile-menu-btn"
+                onClick={() => setSidebarOpen(true)}
+                aria-label="Open menu"
+              >
+                <MenuIcon />
+              </button>
+              <h1 style={{ fontSize: '1.5rem', fontWeight: 800 }}>{title}</h1>
+            </div>
+            <NotificationBell />
           </div>
+
+          <AnnouncementBanner />
         </div>
 
         {children}

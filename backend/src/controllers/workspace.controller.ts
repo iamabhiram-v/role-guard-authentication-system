@@ -179,6 +179,16 @@ export class WorkspaceController {
       next(err);
     }
   }
+
+  async getRecentActivity(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user!.userId;
+      const activity = await workspaceService.getRecentActivity(userId);
+      res.status(200).json({ status: 'success', data: activity });
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 export const workspaceController = new WorkspaceController();

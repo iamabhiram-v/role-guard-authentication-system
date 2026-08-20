@@ -14,9 +14,10 @@ interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  isInitialized: boolean; // true once the initial cookie-based session check has completed
+  isInitialized: boolean;
   error: string | null;
   lastUpdated: number | null;
+  pendingOtpEmail: string | null; // set once login() succeeds and an OTP has been sent
 }
 
 const initialState: AuthState = {
@@ -26,6 +27,7 @@ const initialState: AuthState = {
   isInitialized: false,
   error: null,
   lastUpdated: null,
+  pendingOtpEmail: null,
 };
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
@@ -44,6 +46,8 @@ export const register = createAsyncThunk(
   }
 );
 
+// Step 1: password check → triggers an OTP email/SMS, unless 2FA is disabled
+// for the account, in which case this authenticates the session directly.
 export const login = createAsyncThunk(
   'auth/login',
   async (data: { email: string; password: string }, { rejectWithValue }) => {
@@ -51,49 +55,54 @@ export const login = createAsyncThunk(
       const response = await axios.post(`${API_URL}/auth/login`, data, {
         withCredentials: true,
       });
-      return response.data.data;
+      return response.data.data; // { requiresOtp: true, email } OR { requiresOtp: false, user, tokens }
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Login failed');
     }
   }
 );
 
-export const logout = createAsyncThunk(
-  'auth/logout',
-  async (_, { rejectWithValue }) => {
+// Step 2: OTP check — only reached when requiresOtp was true
+export const verifyOtp = createAsyncThunk(
+  'auth/verifyOtp',
+  async (data: { email: string; code: string }, { rejectWithValue }) => {
     try {
-      await axios.post(`${API_URL}/auth/logout`, {}, { withCredentials: true });
-      return null;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Logout failed');
-    }
-  }
-);
-
-export const refreshToken = createAsyncThunk(
-  'auth/refreshToken',
-  async (_, { rejectWithValue }) => {
-    try {
-      // Cookie is set automatically by the backend response — nothing to store here.
-      await axios.post(`${API_URL}/auth/refresh`, {}, { withCredentials: true });
-      return null;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Token refresh failed');
-    }
-  }
-);
-
-export const fetchCurrentUser = createAsyncThunk(
-  'auth/fetchCurrentUser',
-  async (_, { rejectWithValue }) => {
-    try {
-      const response = await axios.get(`${API_URL}/auth/me`, { withCredentials: true });
+      const response = await axios.post(`${API_URL}/auth/verify-otp`, data, {
+        withCredentials: true,
+      });
       return response.data.data;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch user');
+      return rejectWithValue(error.response?.data?.message || 'Verification failed');
     }
   }
 );
+
+export const logout = createAsyncThunk('auth/logout', async (_, { rejectWithValue }) => {
+  try {
+    await axios.post(`${API_URL}/auth/logout`, {}, { withCredentials: true });
+    return null;
+  } catch (error: any) {
+    return rejectWithValue(error.response?.data?.message || 'Logout failed');
+  }
+});
+
+export const refreshToken = createAsyncThunk('auth/refreshToken', async (_, { rejectWithValue }) => {
+  try {
+    await axios.post(`${API_URL}/auth/refresh`, {}, { withCredentials: true });
+    return null;
+  } catch (error: any) {
+    return rejectWithValue(error.response?.data?.message || 'Token refresh failed');
+  }
+});
+
+export const fetchCurrentUser = createAsyncThunk('auth/fetchCurrentUser', async (_, { rejectWithValue }) => {
+  try {
+    const response = await axios.get(`${API_URL}/auth/me`, { withCredentials: true });
+    return response.data.data;
+  } catch (error: any) {
+    return rejectWithValue(error.response?.data?.message || 'Failed to fetch user');
+  }
+});
 
 const authSlice = createSlice({
   name: 'auth',
@@ -102,9 +111,11 @@ const authSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
+    clearPendingOtp: (state) => {
+      state.pendingOtpEmail = null;
+    },
   },
   extraReducers: (builder) => {
-    // Register
     builder
       .addCase(register.pending, (state) => {
         state.isLoading = true;
@@ -121,7 +132,9 @@ const authSlice = createSlice({
         state.error = action.payload as string;
       });
 
-    // Login
+    // Login (step 1) — success means either "OTP sent" (requiresOtp: true)
+    // or, if 2FA is off for this account, the login already fully
+    // authenticated the session server-side (requiresOtp: false).
     builder
       .addCase(login.pending, (state) => {
         state.isLoading = true;
@@ -129,17 +142,40 @@ const authSlice = createSlice({
       })
       .addCase(login.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.isInitialized = true;
-        state.user = action.payload.user;
-        state.isAuthenticated = true;
-        state.lastUpdated = Date.now();
+        if (action.payload.requiresOtp) {
+          state.pendingOtpEmail = action.payload.email;
+        } else {
+          state.isInitialized = true;
+          state.user = action.payload.user;
+          state.isAuthenticated = true;
+          state.pendingOtpEmail = null;
+          state.lastUpdated = Date.now();
+        }
       })
       .addCase(login.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload as string;
       });
 
-    // Logout
+    // Verify OTP (step 2) — only reached when login() returned requiresOtp: true
+    builder
+      .addCase(verifyOtp.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(verifyOtp.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.isInitialized = true;
+        state.user = action.payload.user;
+        state.isAuthenticated = true;
+        state.pendingOtpEmail = null;
+        state.lastUpdated = Date.now();
+      })
+      .addCase(verifyOtp.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+      });
+
     builder
       .addCase(logout.pending, (state) => {
         state.isLoading = true;
@@ -158,14 +194,11 @@ const authSlice = createSlice({
         state.isAuthenticated = false;
       });
 
-    // Refresh Token — cookie already updated server-side; nothing to store.
-    builder
-      .addCase(refreshToken.rejected, (state) => {
-        state.isAuthenticated = false;
-        state.user = null;
-      });
+    builder.addCase(refreshToken.rejected, (state) => {
+      state.isAuthenticated = false;
+      state.user = null;
+    });
 
-    // Fetch Current User — the source of truth for "am I logged in?" on page load.
     builder
       .addCase(fetchCurrentUser.pending, (state) => {
         state.isLoading = true;
@@ -186,5 +219,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { clearError } = authSlice.actions;
+export const { clearError, clearPendingOtp } = authSlice.actions;
 export default authSlice.reducer;

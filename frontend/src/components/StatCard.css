@@ -1,0 +1,131 @@
+@property --sc-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.sc-shell {
+  position: relative;
+  border-radius: 14px;
+  padding: 1px;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(8px);
+  animation-name: sc-fade-up;
+  animation-duration: 0.5s;
+  animation-fill-mode: forwards;
+  animation-timing-function: ease;
+}
+
+@keyframes sc-fade-up {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.sc-border-spin {
+  position: absolute;
+  inset: -60%;
+  background: conic-gradient(
+    from var(--sc-angle),
+    transparent 0deg,
+    var(--accent, #a855f7) 30deg,
+    transparent 90deg,
+    transparent 360deg
+  );
+  opacity: 0.7;
+  animation: sc-rotate 6s linear infinite;
+}
+
+@keyframes sc-rotate {
+  to { --sc-angle: 360deg; }
+}
+
+.sc-card {
+  position: relative;
+  z-index: 1;
+  background: linear-gradient(180deg, rgba(12, 10, 24, 0.97), rgba(10, 9, 20, 0.98));
+  border-radius: 13px;
+  padding: 18px 20px;
+  backdrop-filter: blur(16px);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.sc-shell:hover .sc-card {
+  transform: translateY(-2px);
+}
+
+.sc-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent, #a855f7) 16%, transparent);
+  color: var(--accent, #a855f7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.sc-value {
+  font-size: 26px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.1;
+  margin-bottom: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sc-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sc-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.sc-trend {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.sc-trend-up { color: #4ade80; }
+.sc-trend-down { color: #f87171; }
+
+/* Alert state — for cards whose metric represents a failure/warning and is currently nonzero */
+.sc-shell.sc-alert .sc-border-spin {
+  background: conic-gradient(
+    from var(--sc-angle),
+    transparent 0deg,
+    rgba(239, 68, 68, 0.95) 25deg,
+    transparent 80deg,
+    transparent 360deg
+  );
+  animation-duration: 3.2s;
+  opacity: 0.9;
+}
+
+.sc-shell.sc-alert .sc-card {
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.18) inset;
+}
+
+.sc-shell.sc-alert .sc-icon {
+  animation: sc-pulse-ring 2s ease-in-out infinite;
+}
+
+@keyframes sc-pulse-ring {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.35); }
+  50% { box-shadow: 0 0 0 5px rgba(239, 68, 68, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sc-border-spin { animation: none; }
+  .sc-shell { animation: none; opacity: 1; transform: none; }
+  .sc-card { transition: none; }
+  .sc-shell.sc-alert .sc-icon { animation: none; }
+}

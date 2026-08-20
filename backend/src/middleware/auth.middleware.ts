@@ -28,3 +28,16 @@ export const authMiddleware = (req: AuthRequest, res: Response, next: NextFuncti
 };
 
 export const authenticate = authMiddleware;
+
+// Must run after authenticate/authMiddleware — relies on req.user.role
+// already being set from the decoded JWT. Returns 403 (not 401) since
+// the user is authenticated, just not permitted for this resource.
+export const requireRole = (...allowedRoles: string[]) => {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.user || !allowedRoles.includes(req.user.role)) {
+      res.status(403).json({ status: 'error', message: 'You do not have permission to access this resource' });
+      return;
+    }
+    next();
+  };
+};

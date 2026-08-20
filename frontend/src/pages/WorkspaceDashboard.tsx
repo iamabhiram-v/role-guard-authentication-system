@@ -3,10 +3,13 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { AppDispatch, RootState } from '../store';
 import { Layout } from '../components/Layout';
+import { ConfirmModal } from '../components/ConfirmModal';
+import { Toast } from '../components/Toast';
 import { PendingInvitations } from './PendingInvitations';
 import {
   fetchWorkspaces,
   fetchPendingInvitations,
+  fetchRecentActivity,
   createWorkspace,
   deleteWorkspace,
   leaveWorkspace,
@@ -14,8 +17,9 @@ import {
   clearWorkspaceError,
   clearWorkspaceSuccess,
   Workspace,
+  ActivityItem,
 } from '../store/slices/workspaceSlice';
-import '../styles/profile.css';
+
 import '../styles/workspace-dashboard.css';
 
 type FilterTab = 'all' | 'owned' | 'shared' | 'invited';
@@ -73,6 +77,65 @@ const PeopleIcon = () => (
     <path d="M17 14.3c2.2.4 3.8 1.8 3.8 3.7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
   </svg>
 );
+
+const PlusIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" width="15" height="15">
+    <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+  </svg>
+);
+
+const XIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" width="15" height="15">
+    <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+  </svg>
+);
+
+const InviteActivityIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" width="13" height="13">
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    <circle cx="9" cy="7" r="4" stroke="currentColor" strokeWidth="1.8" />
+    <path d="M19 8v6M22 11h-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+);
+
+const JoinedActivityIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" width="13" height="13">
+    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    <circle cx="8.5" cy="7" r="4" stroke="currentColor" strokeWidth="1.8" />
+    <path d="m17 11 2 2 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const UpdatedActivityIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" width="13" height="13">
+    <path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+  </svg>
+);
+
+const activityMeta = (item: ActivityItem): { icon: React.ReactNode; text: string; color: string } => {
+  switch (item.type) {
+    case 'invite':
+      return {
+        icon: <InviteActivityIcon />,
+        text: `${item.actor_name || 'Someone'} invited ${item.target} to ${item.workspace_name}`,
+        color: '#60a5fa',
+      };
+    case 'member_joined':
+      return {
+        icon: <JoinedActivityIcon />,
+        text: `${item.target} joined ${item.workspace_name}`,
+        color: '#34d399',
+      };
+    case 'workspace_updated':
+      return {
+        icon: <UpdatedActivityIcon />,
+        text: `${item.workspace_name} was updated`,
+        color: '#a78bfa',
+      };
+    default:
+      return { icon: <UpdatedActivityIcon />, text: 'Activity', color: '#a78bfa' };
+  }
+};
 
 interface CardMenuProps {
   workspace: Workspace;
@@ -137,7 +200,7 @@ const CardMenu: React.FC<CardMenuProps> = ({ workspace, onOpen, onSettings, onLe
 export const WorkspaceDashboard: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
-  const { workspaces, isLoading, isMutating, error, successMessage, pendingInvitations } = useSelector(
+  const { workspaces, isLoading, isMutating, error, successMessage, pendingInvitations, recentActivity, isLoadingActivity } = useSelector(
     (state: RootState) => state.workspace
   );
 
@@ -146,9 +209,14 @@ export const WorkspaceDashboard: React.FC = () => {
   const [formError, setFormError] = useState('');
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
 
+  // Replaces window.confirm for leave/delete actions
+  const [confirmTarget, setConfirmTarget] = useState<Workspace | null>(null);
+  const [isConfirmLoading, setIsConfirmLoading] = useState(false);
+
   useEffect(() => {
     dispatch(fetchWorkspaces());
     dispatch(fetchPendingInvitations());
+    dispatch(fetchRecentActivity());
     return () => {
       dispatch(clearWorkspaceError());
       dispatch(clearWorkspaceSuccess());
@@ -193,38 +261,40 @@ export const WorkspaceDashboard: React.FC = () => {
   };
 
   const handleLeaveOrDelete = (workspace: Workspace) => {
-    if (workspace.role === 'owner') {
-      if (window.confirm(`Permanently delete "${workspace.name}"? This cannot be undone.`)) {
-        dispatch(deleteWorkspace(workspace.id));
-      }
-    } else {
-      if (window.confirm(`Leave "${workspace.name}"?`)) {
-        dispatch(leaveWorkspace(workspace.id));
-      }
-    }
+    setConfirmTarget(workspace);
   };
+
+  const handleConfirmAction = async () => {
+    if (!confirmTarget) return;
+    setIsConfirmLoading(true);
+    if (confirmTarget.role === 'owner') {
+      await dispatch(deleteWorkspace(confirmTarget.id));
+    } else {
+      await dispatch(leaveWorkspace(confirmTarget.id));
+    }
+    setIsConfirmLoading(false);
+    setConfirmTarget(null);
+  };
+
+  const isDeleteAction = confirmTarget?.role === 'owner';
 
   return (
     <Layout title="Workspaces">
       <div className="ws-page-head">
-        <div className="ws-page-icon" aria-hidden="true">
-          <PeopleIcon />
+        <div className="ws-page-head-left">
+          <div className="ws-page-icon" aria-hidden="true">
+            <PeopleIcon />
+          </div>
+          <p className="ws-page-subtitle">Manage and collaborate in your workspaces.</p>
         </div>
-        <p className="ws-page-subtitle">Manage and collaborate in your workspaces.</p>
-      </div>
-
-      {error && <div className="alert alert-error">{error}</div>}
-      {successMessage && !showCreateForm && <div className="alert alert-success">{successMessage}</div>}
-
-      <div className="ws-header-row">
-        <div />
         <div className="ws-header-actions">
           <div className="ws-total-chip">
             <span>Total Workspaces</span>
             <strong>{workspaces.length}</strong>
           </div>
-          <button className="btn-save" onClick={() => setShowCreateForm((v) => !v)}>
-            {showCreateForm ? 'Cancel' : '+ New Workspace'}
+          <button className="ws-btn-save" onClick={() => setShowCreateForm((v) => !v)}>
+            {showCreateForm ? <XIcon /> : <PlusIcon />}
+            {showCreateForm ? 'Cancel' : 'New Workspace'}
           </button>
         </div>
       </div>
@@ -249,31 +319,31 @@ export const WorkspaceDashboard: React.FC = () => {
       </div>
 
       {showCreateForm && (
-        <div className="profile-card narrow" style={{ marginBottom: '2rem' }}>
+        <div className="ws-profile-card narrow" style={{ marginBottom: '2rem' }}>
           <h2 style={{ marginTop: 0 }}>Create Workspace</h2>
-          <form onSubmit={handleCreate} className="profile-form">
-            <div className="form-group">
+          <form onSubmit={handleCreate} className="ws-profile-form">
+            <div className="ws-form-group">
               <label>Name</label>
               <input
                 type="text"
-                className="form-input"
+                className="ws-form-input"
                 value={formData.name}
                 onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                 placeholder="e.g. Product Team"
               />
-              {formError && <span className="error-text">{formError}</span>}
+              {formError && <span className="ws-error-text">{formError}</span>}
             </div>
-            <div className="form-group">
+            <div className="ws-form-group">
               <label>Description (optional)</label>
               <textarea
-                className="form-input"
+                className="ws-form-input"
                 value={formData.description}
                 onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
                 placeholder="What is this workspace for?"
                 rows={3}
               />
             </div>
-            <button type="submit" className="btn-save full" disabled={isMutating}>
+            <button type="submit" className="ws-btn-save full" disabled={isMutating}>
               {isMutating ? 'Creating...' : 'Create Workspace'}
             </button>
           </form>
@@ -285,108 +355,169 @@ export const WorkspaceDashboard: React.FC = () => {
           {activeTab === 'invited' ? (
             <PendingInvitations />
           ) : isLoading ? (
-                <div className="ws-grid">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="ws-card ws-card-skeleton" />
-                  ))}
-                </div>
-              ) : visibleWorkspaces.length === 0 ? (
-                <div className="ws-empty">
-                  <div className="ws-empty-icon">＋</div>
-                  <h3>No workspaces here</h3>
-                  <p>
-                    {activeTab === 'all'
-                      ? 'Create your first workspace to start collaborating with your team.'
-                      : `You don't have any ${activeTab} workspaces yet.`}
-                  </p>
-                </div>
-              ) : (
-                <div className="ws-grid">
-                  {visibleWorkspaces.map((ws) => {
-                    const role = roleStyles[ws.role] || roleStyles.member;
-                    const { icon, gradient } = iconFor(ws.name);
-                    const updated = relativeTime(ws.updated_at);
-                    return (
-                      <div
-                        key={ws.id}
-                        className="ws-card"
-                        style={{ '--accent': role.color } as React.CSSProperties}
-                        onClick={() => openWorkspace(ws)}
-                      >
-                        <div className="ws-card-top">
-                          <div className="ws-avatar" style={{ background: gradient }}>
-                            {icon}
-                          </div>
-                          <CardMenu
-                            workspace={ws}
-                            onOpen={() => openWorkspace(ws)}
-                            onSettings={() => openSettings(ws)}
-                            onLeaveOrDelete={() => handleLeaveOrDelete(ws)}
-                          />
-                        </div>
-
-                        <div className="ws-name-row">
-                          <h3 className="ws-name">{ws.name}</h3>
-                          <span className="ws-role-badge" style={{ '--role-color': role.color } as React.CSSProperties}>
-                            {role.label}
-                          </span>
-                        </div>
-
-                        <p className={`ws-description ${!ws.description ? 'ws-description-empty' : ''}`}>
-                          {ws.description || 'No description added'}
-                        </p>
-
-                        <div className="ws-card-footer">
-                          <span className="ws-member-count">
-                            <PeopleIcon /> {ws.member_count} member{ws.member_count === 1 ? '' : 's'}
-                          </span>
-                          {updated && <span className="ws-updated">Updated {updated}</span>}
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  <button className="ws-card ws-create-tile" onClick={() => setShowCreateForm(true)}>
-                    <span className="ws-create-icon">+</span>
-                    <strong>Create New Workspace</strong>
-                    <span>Start collaborating with your team.</span>
-                  </button>
-                </div>
-              )}
+            <div className="ws-grid">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="ws-card ws-card-skeleton" />
+              ))}
             </div>
+          ) : visibleWorkspaces.length === 0 ? (
+            <div className="ws-empty">
+              <div className="ws-empty-icon">＋</div>
+              <h3>No workspaces here</h3>
+              <p>
+                {activeTab === 'all'
+                  ? 'Create your first workspace to start collaborating with your team.'
+                  : `You don't have any ${activeTab} workspaces yet.`}
+              </p>
+            </div>
+          ) : (
+            <div className="ws-grid">
+              {visibleWorkspaces.map((ws) => {
+                const role = roleStyles[ws.role] || roleStyles.member;
+                const { icon, gradient } = iconFor(ws.name);
+                const updated = relativeTime(ws.updated_at);
+                return (
+                  <div
+                    key={ws.id}
+                    className="ws-card"
+                    style={{ '--accent': role.color } as React.CSSProperties}
+                    onClick={() => openWorkspace(ws)}
+                  >
+                    <div className="ws-card-top">
+                      <div className="ws-avatar" style={{ background: gradient }}>
+                        {icon}
+                      </div>
+                      <CardMenu
+                        workspace={ws}
+                        onOpen={() => openWorkspace(ws)}
+                        onSettings={() => openSettings(ws)}
+                        onLeaveOrDelete={() => handleLeaveOrDelete(ws)}
+                      />
+                    </div>
 
-            {/* Sidebar */}
-            <div className="ws-sidebar">
-              <div className="settings-card ws-side-card">
-                <p className="settings-eyebrow">Quick stats</p>
-                <div className="ws-stat-row">
-                  <span>Total Workspaces</span>
-                  <strong>{workspaces.length}</strong>
-                </div>
-                <div className="ws-stat-row">
-                  <span>Owned</span>
-                  <strong className="accent-owner">{ownedCount}</strong>
-                </div>
-                <div className="ws-stat-row">
-                  <span>Shared</span>
-                  <strong className="accent-shared">{sharedCount}</strong>
-                </div>
-                <div className="ws-stat-row">
-                  <span>Invited</span>
-                  <strong className="accent-invited">{invitedCount}</strong>
-                </div>
-              </div>
+                    <div className="ws-name-row">
+                      <h3 className="ws-name">{ws.name}</h3>
+                      <span className="ws-role-badge" style={{ '--role-color': role.color } as React.CSSProperties}>
+                        {role.label}
+                      </span>
+                    </div>
 
-              <div className="settings-card ws-side-card coming-soon-card">
-                <p className="settings-eyebrow">
-                  Recent activity <span className="coming-soon-tag">Coming soon</span>
-                </p>
-                <p className="ws-activity-placeholder">
-                  A live feed of invites, membership changes, and workspace updates will appear here.
-                </p>
-              </div>
+                    <p className={`ws-description ${!ws.description ? 'ws-description-empty' : ''}`}>
+                      {ws.description || 'No description added'}
+                    </p>
+
+                    <div className="ws-card-footer">
+                      <span className="ws-member-count">
+                        <PeopleIcon /> {ws.member_count} member{ws.member_count === 1 ? '' : 's'}
+                      </span>
+                      {updated && <span className="ws-updated">Updated {updated}</span>}
+                    </div>
+                  </div>
+                );
+              })}
+
+              <button className="ws-card ws-create-tile" onClick={() => setShowCreateForm(true)}>
+                <span className="ws-create-icon">+</span>
+                <strong>Create New Workspace</strong>
+                <span>Start collaborating with your team.</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Sidebar */}
+        <div className="ws-sidebar">
+          <div className="settings-card ws-side-card">
+            <p className="settings-eyebrow">Quick stats</p>
+            <div className="ws-stat-row">
+              <span>Total Workspaces</span>
+              <strong>{workspaces.length}</strong>
+            </div>
+            <div className="ws-stat-row">
+              <span>Owned</span>
+              <strong className="accent-owner">{ownedCount}</strong>
+            </div>
+            <div className="ws-stat-row">
+              <span>Shared</span>
+              <strong className="accent-shared">{sharedCount}</strong>
+            </div>
+            <div className="ws-stat-row">
+              <span>Invited</span>
+              <strong className="accent-invited">{invitedCount}</strong>
             </div>
           </div>
+
+          <div className="settings-card ws-side-card">
+            <p className="settings-eyebrow">Recent activity</p>
+            {isLoadingActivity ? (
+              <p className="ws-activity-placeholder">Loading...</p>
+            ) : recentActivity.length === 0 ? (
+              <p className="ws-activity-placeholder">
+                Invites, membership changes, and workspace updates will appear here.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                {recentActivity.map((item, idx) => {
+                  const meta = activityMeta(item);
+                  return (
+                    <div key={idx} style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start' }}>
+                      <div
+                        style={{
+                          width: '1.6rem',
+                          height: '1.6rem',
+                          borderRadius: '0.4rem',
+                          background: `${meta.color}22`,
+                          color: meta.color,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                          marginTop: '0.1rem',
+                        }}
+                      >
+                        {meta.icon}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '0.78rem', lineHeight: 1.4, margin: 0 }}>
+                          {meta.text}
+                        </p>
+                        <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.7rem' }}>
+                          {relativeTime(item.occurred_at)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <ConfirmModal
+        isOpen={!!confirmTarget}
+        title={isDeleteAction ? 'Delete workspace' : 'Leave workspace'}
+        message={
+          isDeleteAction
+            ? `Permanently delete "${confirmTarget?.name}"? This cannot be undone.`
+            : `Leave "${confirmTarget?.name}"? You'll need a new invite to rejoin.`
+        }
+        confirmLabel={isDeleteAction ? 'Delete' : 'Leave'}
+        variant={isDeleteAction ? 'danger' : 'default'}
+        isLoading={isConfirmLoading}
+        onConfirm={handleConfirmAction}
+        onCancel={() => setConfirmTarget(null)}
+      />
+
+      <Toast
+        message={error || successMessage || ''}
+        variant={error ? 'error' : 'success'}
+        isVisible={!!(error || successMessage)}
+        onClose={() => {
+          dispatch(clearWorkspaceError());
+          dispatch(clearWorkspaceSuccess());
+        }}
+      />
     </Layout>
   );
 };

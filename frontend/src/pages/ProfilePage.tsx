@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../store';
-import { fetchProfile, updateProfile, clearSuccessMessage } from '../store/slices/profileSlice';
+import { fetchProfile, updateProfile, uploadAvatar, clearSuccessMessage, clearProfileError } from '../store/slices/profileSlice';
 import { Layout } from '../components/Layout';
+import { Toast } from '../components/Toast';
 import styles from '../styles/profile.module.css';
 
 const EditIcon = () => (
@@ -85,6 +86,12 @@ const KeyIcon = () => (
     <path d="M10.5 12.5 18 5M18 5v3.5M18 5h-3.5M14.5 8.5l2 2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
+const CameraIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" width="14" height="14">
+    <path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2l1-2h7l1 2h2A1.5 1.5 0 0 1 20 8.5v9A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5v-9Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+    <circle cx="12" cy="13" r="3.2" stroke="currentColor" strokeWidth="1.7" />
+  </svg>
+);
 
 const ROLE_META: Record<string, { label: string; description: string }> = {
   admin: { label: 'Administrator', description: 'Full access to users, roles, and system settings.' },
@@ -103,6 +110,14 @@ const formatLastLogin = (iso?: string) => {
   return isToday ? `Today, ${time}` : `${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, ${time}`;
 };
 
+const isValidPhone = (phone: string): boolean => {
+  if (!phone.trim()) return true;
+  return /^\+?[0-9\s\-()]{7,20}$/.test(phone.trim());
+};
+
+const ALLOWED_AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
+
 export const ProfilePage: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const { profile, isLoading, isUpdating, error, successMessage } = useSelector(
@@ -118,9 +133,19 @@ export const ProfilePage: React.FC = () => {
   });
   const [isEditing, setIsEditing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     dispatch(fetchProfile());
+  }, [dispatch]);
+
+  useEffect(() => {
+    return () => {
+      dispatch(clearSuccessMessage());
+      dispatch(clearProfileError());
+    };
   }, [dispatch]);
 
   useEffect(() => {
@@ -138,17 +163,22 @@ export const ProfilePage: React.FC = () => {
   useEffect(() => {
     if (successMessage) {
       setIsEditing(false);
-      const timer = setTimeout(() => dispatch(clearSuccessMessage()), 3000);
-      return () => clearTimeout(timer);
     }
-  }, [successMessage, dispatch]);
+  }, [successMessage]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    if (name === 'phone') setPhoneError(null);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isValidPhone(formData.phone)) {
+      setPhoneError('Enter a valid phone number (7–20 digits, may include +, spaces, hyphens, or parentheses)');
+      return;
+    }
+    setPhoneError(null);
     dispatch(updateProfile(formData));
   };
 
@@ -158,6 +188,29 @@ export const ProfilePage: React.FC = () => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });
+  };
+
+  const handleAvatarClick = () => {
+    setAvatarError(null);
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file later
+    if (!file) return;
+
+    if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
+      setAvatarError('Only JPEG, PNG, or WebP images are allowed');
+      return;
+    }
+    if (file.size > MAX_AVATAR_SIZE) {
+      setAvatarError('Image must be under 5MB');
+      return;
+    }
+
+    setAvatarError(null);
+    dispatch(uploadAvatar(file));
   };
 
   if (isLoading && !profile) {
@@ -193,7 +246,31 @@ export const ProfilePage: React.FC = () => {
                 <span />
                 <span />
               </div>
-              <div className={styles.idCardAvatar}>{initial}</div>
+
+              <button
+                type="button"
+                className={styles.idCardAvatar}
+                onClick={handleAvatarClick}
+                disabled={isUpdating}
+                aria-label="Change profile photo"
+                style={
+                  profile?.avatar_url
+                    ? { backgroundImage: `url(${profile.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' }
+                    : undefined
+                }
+              >
+                {!profile?.avatar_url && initial}
+                <span className={styles.idCardAvatarOverlay}>
+                  <CameraIcon />
+                </span>
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleAvatarChange}
+                style={{ display: 'none' }}
+              />
             </div>
 
             <div className={styles.idCardIdentity}>
@@ -208,6 +285,9 @@ export const ProfilePage: React.FC = () => {
               <p className={styles.idCardHandle}>
                 @{profile?.username} <span className={styles.idCardDot}>&middot;</span> {profile?.email}
               </p>
+              {avatarError && (
+                <p style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: '0.3rem' }}>{avatarError}</p>
+              )}
             </div>
 
             {!isEditing && (
@@ -216,9 +296,6 @@ export const ProfilePage: React.FC = () => {
               </button>
             )}
           </div>
-
-          {successMessage && <div className={`${styles.alert} ${styles.alertSuccess}`}>{successMessage}</div>}
-          {error && <div className={`${styles.alert} ${styles.alertError}`}>{error}</div>}
 
           <div className={styles.idCardDivider} />
 
@@ -271,7 +348,19 @@ export const ProfilePage: React.FC = () => {
                 </div>
                 <div className={styles.formGroup}>
                   <label>Phone</label>
-                  <input name="phone" value={formData.phone} onChange={handleChange} className={styles.formInput} placeholder="Not provided" />
+                  <input
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleChange}
+                    className={styles.formInput}
+                    placeholder="Not provided"
+                    style={phoneError ? { borderColor: '#ef4444' } : undefined}
+                  />
+                  {phoneError && (
+                    <span style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: '0.3rem', display: 'block' }}>
+                      {phoneError}
+                    </span>
+                  )}
                 </div>
                 <div className={`${styles.formGroup} ${styles.formFull}`}>
                   <label>Bio</label>
@@ -282,7 +371,7 @@ export const ProfilePage: React.FC = () => {
                 <button type="submit" className={styles.btnSave} disabled={isUpdating}>
                   {isUpdating ? 'Saving...' : 'Save Changes'}
                 </button>
-                <button type="button" className={styles.btnCancel} onClick={() => setIsEditing(false)}>
+                <button type="button" className={styles.btnCancel} onClick={() => { setIsEditing(false); setPhoneError(null); }}>
                   Cancel
                 </button>
               </div>
@@ -357,7 +446,9 @@ export const ProfilePage: React.FC = () => {
                 <div className={`${styles.row} ${styles.rowLast}`}>
                   <span className={styles.rowIcon}><KeyIcon /></span>
                   <span className={styles.rowLabel}>Two-factor auth</span>
-                  <span className={`${styles.rowValue} ${styles.muted}`}>Not enabled</span>
+                  <span className={`${styles.rowValue} ${styles.good}`}>
+                    <DotIcon /> Enabled &middot; Email OTP
+                  </span>
                 </div>
               </div>
 
@@ -368,6 +459,16 @@ export const ProfilePage: React.FC = () => {
           </div>
         )}
       </div>
+
+      <Toast
+        message={error || successMessage || ''}
+        variant={error ? 'error' : 'success'}
+        isVisible={!!(error || successMessage)}
+        onClose={() => {
+          dispatch(clearSuccessMessage());
+          dispatch(clearProfileError());
+        }}
+      />
     </Layout>
   );
 };

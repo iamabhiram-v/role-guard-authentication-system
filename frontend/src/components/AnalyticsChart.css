@@ -1,0 +1,142 @@
+.ac-container {
+  position: relative;
+  width: 100%;
+}
+
+.ac-legend {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.ac-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 7px;
+  padding: 5px 9px;
+  cursor: pointer;
+  transition: background 0.2s ease, opacity 0.2s ease, border-color 0.2s ease;
+}
+
+.ac-legend-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.ac-legend-item-off {
+  opacity: 0.4;
+}
+
+.ac-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ac-legend-total {
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.35);
+  margin-left: 2px;
+}
+
+.ac-svg {
+  width: 100%;
+  height: 260px;
+  display: block;
+  overflow: visible;
+}
+
+.ac-tooltip {
+  position: absolute;
+  top: 4px;
+  transform: translateX(-50%);
+  background: rgba(14, 12, 24, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 10px 12px;
+  min-width: 150px;
+  pointer-events: none;
+  z-index: 10;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.ac-tooltip-date {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 7px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  letter-spacing: 0.3px;
+}
+
+.ac-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  padding: 2px 0;
+}
+
+.ac-tooltip-row-off {
+  opacity: 0.35;
+}
+
+.ac-tooltip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ac-tooltip-label {
+  color: rgba(255, 255, 255, 0.6);
+  flex: 1;
+}
+
+.ac-tooltip-value {
+  color: #fff;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ac-xlabels {
+  position: relative;
+  height: 18px;
+  margin-top: 6px;
+  padding: 0 2px;
+}
+
+.ac-xlabel {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.35);
+  white-space: nowrap;
+}
+
+.ac-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 60px 0;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 13px;
+}
+
+.ac-empty-icon {
+  font-size: 22px;
+  color: rgba(168, 85, 247, 0.4);
+}

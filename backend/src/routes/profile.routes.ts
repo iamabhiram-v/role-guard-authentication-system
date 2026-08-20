@@ -24,6 +24,8 @@ router.put(
   profileController.changePassword.bind(profileController)
 );
 
+router.patch('/2fa', profileController.toggle2FA.bind(profileController));
+
 router.delete(
   '/',
   rateLimiter({ windowMs: 60 * 60 * 1000, maxRequests: 3 }),

@@ -1,4 +1,4 @@
--- Task 14: Workspace & Team Management schema
+
 
 
 CREATE TABLE IF NOT EXISTS workspaces (

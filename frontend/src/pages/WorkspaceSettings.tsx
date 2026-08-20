@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AppDispatch, RootState } from '../store';
 import { Layout } from '../components/Layout';
-import { Alert } from '../components/Alert';
+import { Toast } from '../components/Toast';
 import {
   fetchWorkspace,
   fetchMembers,
@@ -14,7 +14,36 @@ import {
   clearWorkspaceError,
   clearWorkspaceSuccess,
 } from '../store/slices/workspaceSlice';
-import '../styles/profile.css';
+import '../styles/workspace-dashboard.css';
+
+const CogIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" width="15" height="15">
+    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
+    <path
+      d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const SwapIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" width="15" height="15">
+    <path d="m17 2 4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M3 11V9a4 4 0 0 1 4-4h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="m7 22-4-4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M21 13v2a4 4 0 0 1-4 4H3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const WarningIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" width="15" height="15">
+    <path d="M12 3.5 21 19.5H3L12 3.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    <path d="M12 9.5v4.2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    <circle cx="12" cy="16.6" r="0.9" fill="currentColor" />
+  </svg>
+);
 
 export const WorkspaceSettings: React.FC = () => {
   const { workspaceId } = useParams<{ workspaceId: string }>();
@@ -45,26 +74,6 @@ export const WorkspaceSettings: React.FC = () => {
       setFormData({ name: currentWorkspace.name, description: currentWorkspace.description || '' });
     }
   }, [currentWorkspace]);
-
-  // Auto-dismiss the success alert after a few seconds
-  useEffect(() => {
-    if (successMessage) {
-      const timer = setTimeout(() => {
-        dispatch(clearWorkspaceSuccess());
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [successMessage, dispatch]);
-
-  // Auto-dismiss the error alert after a few seconds too
-  useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => {
-        dispatch(clearWorkspaceError());
-      }, 4000);
-      return () => clearTimeout(timer);
-    }
-  }, [error, dispatch]);
 
   if (!workspaceId || !currentWorkspace) {
     return (
@@ -109,26 +118,29 @@ export const WorkspaceSettings: React.FC = () => {
 
   return (
     <Layout title={`${currentWorkspace.name} — Settings`}>
-      {error && <Alert type="error">{error}</Alert>}
-      {successMessage && <Alert type="success">{successMessage}</Alert>}
-
-      <div className="profile-card narrow" style={{ marginBottom: '2rem' }}>
-        <h2 style={{ marginTop: 0 }}>General</h2>
-        <form onSubmit={handleSave} className="profile-form">
-          <div className="form-group">
+      <div className="ws-profile-card narrow" style={{ marginBottom: '1.5rem' }}>
+        <div className="ws-section-head">
+          <div className="ws-section-icon"><CogIcon /></div>
+          <div>
+            <h2>General</h2>
+            <p>Basic details for this workspace.</p>
+          </div>
+        </div>
+        <form onSubmit={handleSave} className="ws-profile-form">
+          <div className="ws-form-group">
             <label>Name</label>
             <input
               type="text"
-              className="form-input"
+              className="ws-form-input"
               value={formData.name}
               disabled={!canEdit}
               onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
             />
           </div>
-          <div className="form-group">
+          <div className="ws-form-group">
             <label>Description</label>
             <textarea
-              className="form-input"
+              className="ws-form-input"
               rows={3}
               value={formData.description}
               disabled={!canEdit}
@@ -136,7 +148,7 @@ export const WorkspaceSettings: React.FC = () => {
             />
           </div>
           {canEdit && (
-            <button type="submit" className="btn-save full" disabled={isMutating}>
+            <button type="submit" className="ws-btn-save full" disabled={isMutating}>
               {isMutating ? 'Saving...' : 'Save Changes'}
             </button>
           )}
@@ -144,22 +156,22 @@ export const WorkspaceSettings: React.FC = () => {
       </div>
 
       {isOwner && otherMembers.length > 0 && (
-        <div className="profile-card narrow" style={{ marginBottom: '2rem' }}>
-          <h2 style={{ marginTop: 0 }}>Transfer Ownership</h2>
-          <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem' }}>
-            Hand off ownership of this workspace to another member. You'll become an admin.
-          </p>
+        <div className="ws-profile-card narrow" style={{ marginBottom: '1.5rem' }}>
+          <div className="ws-section-head">
+            <div className="ws-section-icon"><SwapIcon /></div>
+            <div>
+              <h2>Transfer Ownership</h2>
+              <p>Hand off ownership to another member — you'll become an admin.</p>
+            </div>
+          </div>
           {!showTransferModal ? (
-            <button
-              onClick={() => setShowTransferModal(true)}
-              style={{ background: 'none', border: '1px solid rgba(124,58,237,0.6)', color: '#a78bfa', borderRadius: '0.5rem', padding: '0.5rem 1rem', cursor: 'pointer' }}
-            >
+            <button onClick={() => setShowTransferModal(true)} className="ws-btn-outline">
               Transfer Ownership
             </button>
           ) : (
             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
               <select
-                className="form-input"
+                className="ws-form-input"
                 style={{ width: 'auto', color: '#fff', background: '#1e1b3a' }}
                 value={transferTargetId}
                 onChange={(e) => setTransferTargetId(e.target.value)}
@@ -171,13 +183,10 @@ export const WorkspaceSettings: React.FC = () => {
                   </option>
                 ))}
               </select>
-              <button className="btn-save" disabled={!transferTargetId || isMutating} onClick={handleTransfer}>
+              <button className="ws-btn-save" disabled={!transferTargetId || isMutating} onClick={handleTransfer}>
                 Confirm Transfer
               </button>
-              <button
-                onClick={() => setShowTransferModal(false)}
-                style={{ background: 'none', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', borderRadius: '0.5rem', padding: '0.5rem 1rem', cursor: 'pointer' }}
-              >
+              <button onClick={() => setShowTransferModal(false)} className="ws-btn-ghost">
                 Cancel
               </button>
             </div>
@@ -185,47 +194,40 @@ export const WorkspaceSettings: React.FC = () => {
         </div>
       )}
 
-      <div
-        className="profile-card narrow"
-        style={{ borderColor: 'rgba(239,68,68,0.4)' }}
-      >
-        <h2 style={{ marginTop: 0, color: '#ef4444' }}>Danger Zone</h2>
+      <div className="ws-profile-card narrow ws-danger-card">
+        <div className="ws-section-head">
+          <div className="ws-section-icon danger"><WarningIcon /></div>
+          <div>
+            <h2 style={{ color: '#fca5a5' }}>Danger Zone</h2>
+            <p>Irreversible and permanent actions.</p>
+          </div>
+        </div>
 
         {isOwner ? (
           <>
-            <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem' }}>
+            <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: '0.85rem', marginBottom: '1rem' }}>
               Permanently delete this workspace and remove all members. This cannot be undone.
             </p>
             {!showDeleteModal ? (
-              <button
-                onClick={() => setShowDeleteModal(true)}
-                style={{ background: '#ef4444', border: 'none', color: '#fff', borderRadius: '0.5rem', padding: '0.5rem 1rem', cursor: 'pointer' }}
-              >
+              <button onClick={() => setShowDeleteModal(true)} className="ws-btn-danger">
                 Delete Workspace
               </button>
             ) : (
               <div>
-                <div className="form-group">
+                <div className="ws-form-group">
                   <label>Type DELETE to confirm</label>
                   <input
                     type="text"
-                    className="form-input"
+                    className="ws-form-input"
                     value={deleteConfirm}
                     onChange={(e) => setDeleteConfirm(e.target.value)}
                   />
                 </div>
                 <div style={{ display: 'flex', gap: '0.75rem' }}>
-                  <button
-                    disabled={deleteConfirm !== 'DELETE' || isMutating}
-                    onClick={handleDelete}
-                    style={{ background: '#ef4444', border: 'none', color: '#fff', borderRadius: '0.5rem', padding: '0.5rem 1rem', cursor: 'pointer', opacity: deleteConfirm !== 'DELETE' ? 0.5 : 1 }}
-                  >
+                  <button disabled={deleteConfirm !== 'DELETE' || isMutating} onClick={handleDelete} className="ws-btn-danger">
                     Permanently Delete
                   </button>
-                  <button
-                    onClick={() => setShowDeleteModal(false)}
-                    style={{ background: 'none', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', borderRadius: '0.5rem', padding: '0.5rem 1rem', cursor: 'pointer' }}
-                  >
+                  <button onClick={() => setShowDeleteModal(false)} className="ws-btn-ghost">
                     Cancel
                   </button>
                 </div>
@@ -234,18 +236,25 @@ export const WorkspaceSettings: React.FC = () => {
           </>
         ) : (
           <>
-            <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem' }}>
+            <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: '0.85rem', marginBottom: '1rem' }}>
               Leaving removes your access to this workspace. You can be invited back later.
             </p>
-            <button
-              onClick={handleLeave}
-              style={{ background: '#ef4444', border: 'none', color: '#fff', borderRadius: '0.5rem', padding: '0.5rem 1rem', cursor: 'pointer' }}
-            >
+            <button onClick={handleLeave} className="ws-btn-danger">
               Leave Workspace
             </button>
           </>
         )}
       </div>
+
+      <Toast
+        message={error || successMessage || ''}
+        variant={error ? 'error' : 'success'}
+        isVisible={!!(error || successMessage)}
+        onClose={() => {
+          dispatch(clearWorkspaceError());
+          dispatch(clearWorkspaceSuccess());
+        }}
+      />
     </Layout>
   );
 };

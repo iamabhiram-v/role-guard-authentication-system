@@ -24,6 +24,19 @@ const DashboardIcon = () => (
   </svg>
 );
 
+const AnalyticsIcon = () => (
+  <svg {...iconProps}>
+    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+  </svg>
+);
+
+const ServiceStatusIcon = () => (
+  <svg {...iconProps}>
+    <path d="M12 2a10 10 0 1 0 10 10" />
+    <path d="M12 2v10l7 4" />
+  </svg>
+);
+
 const ProfileIcon = () => (
   <svg {...iconProps}>
     <circle cx="12" cy="8" r="4" />
@@ -46,10 +59,39 @@ const SettingsIcon = () => (
   </svg>
 );
 
+const QueueIcon = () => (
+  <svg {...iconProps}>
+    <rect x="3" y="4" width="18" height="4" rx="1" />
+    <rect x="3" y="10" width="18" height="4" rx="1" />
+    <rect x="3" y="16" width="18" height="4" rx="1" />
+  </svg>
+);
+
 const LockIcon = () => (
   <svg {...iconProps}>
     <rect x="5" y="11" width="14" height="9" rx="2" />
     <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+  </svg>
+);
+
+const PaymentIcon = () => (
+  <svg {...iconProps}>
+    <rect x="2" y="5" width="20" height="14" rx="2" />
+    <line x1="2" y1="10" x2="22" y2="10" />
+  </svg>
+);
+
+const BellIcon = () => (
+  <svg {...iconProps}>
+    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+  </svg>
+);
+
+const InboxIcon = () => (
+  <svg {...iconProps}>
+    <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+    <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
   </svg>
 );
 
@@ -69,12 +111,24 @@ const CloseIcon = () => (
 );
 
 const navItems = [
-  { to: '/dashboard', label: 'Dashboard', Icon: DashboardIcon },
-  { to: '/profile', label: 'Profile', Icon: ProfileIcon },
-  { to: '/workspaces', label: 'Workspaces', Icon: WorkspacesIcon },
-  { to: '/settings', label: 'Settings', Icon: SettingsIcon },
-  { to: '/change-password', label: 'Change Password', Icon: LockIcon },
+  { to: '/dashboard', label: 'Dashboard', Icon: DashboardIcon, end: true },
+  { to: '/profile', label: 'Profile', Icon: ProfileIcon, end: true },
+  { to: '/workspaces', label: 'Workspaces', Icon: WorkspacesIcon, end: false },
+  { to: '/notifications', label: 'Notification Center', Icon: InboxIcon, end: true },
+  { to: '/payments', label: 'Payments', Icon: PaymentIcon, end: true },
+  { to: '/settings', label: 'Settings', Icon: SettingsIcon, end: true },
+  { to: '/settings/notifications', label: 'Notification Preferences', Icon: BellIcon, end: true },
+  { to: '/change-password', label: 'Change Password', Icon: LockIcon, end: true },
 ];
+
+// Analytics, Service Status, and Queue Monitor are admin-only — same
+// privilege gate as the backend's dashboard/service-status/queue
+// controllers, and matches ProtectedRoute's requiredRoles on /queue,
+// so the link only appears for roles that can actually load the page.
+const PRIVILEGED_ROLES = ['admin'];
+const analyticsNavItem = { to: '/analytics', label: 'Analytics', Icon: AnalyticsIcon, end: true };
+const serviceStatusNavItem = { to: '/service-status', label: 'Service Status', Icon: ServiceStatusIcon, end: true };
+const queueNavItem = { to: '/queue', label: 'Queue Monitor', Icon: QueueIcon, end: true };
 
 const getInitials = (name: string | undefined) => {
   if (!name) return '?';
@@ -95,6 +149,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     await dispatch(logout());
     navigate('/login');
   };
+
+  const canViewAnalytics = user?.role ? PRIVILEGED_ROLES.includes(user.role) : false;
+  const visibleNavItems = canViewAnalytics
+    ? [navItems[0], analyticsNavItem, serviceStatusNavItem, queueNavItem, ...navItems.slice(1)]
+    : navItems;
 
   return (
     <aside
@@ -201,10 +260,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       </div>
 
       <nav style={{ display: 'flex', flexDirection: 'column' }}>
-        {navItems.map(({ to, label, Icon }) => (
+        {visibleNavItems.map(({ to, label, Icon, end }) => (
           <NavLink
             key={to}
             to={to}
+            end={end}
             onClick={onClose}
             className={({ isActive }) => `sb-nav-item${isActive ? ' active' : ''}`}
           >

@@ -6,8 +6,11 @@ import {
   ForbiddenError,
 } from '../utils/errors';
 import { WorkspaceRole } from '../types/workspace';
+import { queueService } from './queue.service';
+import { notificationPreferencesService } from './notificationPreferences.service';
 
 const INVITE_EXPIRY_DAYS = 7;
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 const slugify = (name: string): string =>
   name
@@ -157,7 +160,13 @@ export const workspaceService = {
   },
 
   async inviteMember(workspaceId: string, inviterId: string, email: string, role: 'admin' | 'member') {
-    await requireRole(workspaceId, inviterId, ['owner', 'admin']);
+    const inviter = await requireRole(workspaceId, inviterId, ['owner', 'admin']);
+
+    const workspaceResult = await db.query('SELECT name FROM workspaces WHERE id = $1', [workspaceId]);
+    const workspaceName = workspaceResult.rows[0]?.name || 'a workspace';
+
+    const inviterResult = await db.query('SELECT username, email FROM users WHERE id = $1', [inviterId]);
+    const inviterName = inviterResult.rows[0]?.username || inviterResult.rows[0]?.email || 'Someone';
 
     const existingUser = await db.query('SELECT id FROM users WHERE email = $1', [email]);
     if (existingUser.rows.length > 0) {
@@ -177,9 +186,46 @@ export const workspaceService = {
       [workspaceId, email, role, inviterId, token, expiresAt]
     );
 
-    // NOTE: no email service is wired up yet — logging the invite link for now.
-    // Replace with an actual email send (e.g. Nodemailer) when available.
-    console.log(`📧 Workspace invite for ${email}: /invites/${token}/accept`);
+    const inviteLink = `${FRONTEND_URL}/invites/${token}/accept`;
+
+ 
+    const invitedUserId = existingUser.rows.length > 0 ? existingUser.rows[0].id : null;
+    const emailAllowed = invitedUserId
+      ? await notificationPreferencesService.isChannelEnabled(invitedUserId, 'workspace_invite', 'email')
+      : true;
+
+    if (emailAllowed) {
+      await queueService.enqueue(
+        'email',
+        {
+          to: email,
+          subject: `${inviterName} invited you to join ${workspaceName} on RoleGuard`,
+          html: `
+            <p>Hi,</p>
+            <p><strong>${inviterName}</strong> has invited you to join <strong>${workspaceName}</strong> on RoleGuard as a <strong>${role}</strong>.</p>
+            <p><a href="${inviteLink}">Click here to accept the invite</a></p>
+            <p>This invite expires in ${INVITE_EXPIRY_DAYS} days.</p>
+          `,
+        },
+        { createdBy: inviterId }
+      );
+    }
+
+    // If the invited email already belongs to a registered user, also push an in-app notification
+    if (invitedUserId) {
+      const inAppAllowed = await notificationPreferencesService.isChannelEnabled(invitedUserId, 'workspace_invite', 'in_app');
+      if (inAppAllowed) {
+        await queueService.enqueue(
+          'notification',
+          {
+            userId: invitedUserId,
+            title: `Invite to ${workspaceName}`,
+            message: `${inviterName} invited you to join ${workspaceName} as a ${role}.`,
+          },
+          { createdBy: inviterId }
+        );
+      }
+    }
 
     return result.rows[0];
   },
@@ -360,5 +406,60 @@ export const workspaceService = {
     }
 
     return { message: 'Ownership transferred' };
+  },
+
+  async getRecentActivity(userId: string, limit = 10) {
+    const workspaceIds = await db.query(
+      `SELECT workspace_id FROM workspace_members WHERE user_id = $1`,
+      [userId]
+    );
+    const ids = workspaceIds.rows.map((r) => r.workspace_id);
+    if (ids.length === 0) return [];
+
+    const result = await db.query(
+      `
+      SELECT
+        'invite' AS type,
+        wi.created_at AS occurred_at,
+        w.name AS workspace_name,
+        wi.email AS target,
+        u.username AS actor_name
+      FROM workspace_invites wi
+      JOIN workspaces w ON w.id = wi.workspace_id
+      LEFT JOIN users u ON u.id = wi.invited_by
+      WHERE wi.workspace_id = ANY($1::uuid[])
+
+      UNION ALL
+
+      SELECT
+        'member_joined' AS type,
+        wm.joined_at AS occurred_at,
+        w.name AS workspace_name,
+        u.username AS target,
+        NULL AS actor_name
+      FROM workspace_members wm
+      JOIN workspaces w ON w.id = wm.workspace_id
+      JOIN users u ON u.id = wm.user_id
+      WHERE wm.workspace_id = ANY($1::uuid[])
+
+      UNION ALL
+
+      SELECT
+        'workspace_updated' AS type,
+        w.updated_at AS occurred_at,
+        w.name AS workspace_name,
+        NULL AS target,
+        NULL AS actor_name
+      FROM workspaces w
+      WHERE w.id = ANY($1::uuid[])
+        AND w.updated_at > w.created_at
+
+      ORDER BY occurred_at DESC
+      LIMIT $2
+      `,
+      [ids, limit]
+    );
+
+    return result.rows;
   },
 };

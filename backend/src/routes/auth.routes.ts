@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express';
+import { z, ZodError } from 'zod';
 import { userService } from '../services/user.service';
 import { authMiddleware, AuthRequest } from '../middleware/auth.middleware';
 import { createRateLimiter } from '../middleware/rateLimiter';
 import { loginSchema, registerSchema } from '../validations/auth.validation';
-import { ZodError } from 'zod';
 import { decodeToken } from '../utils/jwt';
 
 const router = Router();
@@ -18,6 +18,17 @@ const registerLimiter = createRateLimiter({
   windowMs: 60 * 60 * 1000,
   maxRequests: 3,
   keyGenerator: (req) => `register:${req.ip || 'unknown'}`,
+});
+
+const otpLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  maxRequests: 8, // slightly more than loginLimiter to allow for a retry/resend
+  keyGenerator: (req) => `otp:${req.ip || 'unknown'}`,
+});
+
+const otpSchema = z.object({
+  email: z.string().email(),
+  code: z.string().length(6),
 });
 
 const formatValidationError = (error: ZodError) => {
@@ -95,11 +106,63 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
   }
 });
 
+// Step 1 of login: verify email/password.
+// If 2FA is disabled, tokens are issued immediately.
+// If 2FA is enabled, an OTP is emailed and tokens are only issued after /verify-otp.
 router.post('/login', loginLimiter, async (req: Request, res: Response) => {
   try {
     const validatedData = loginSchema.parse(req.body);
+    const result = await userService.login(validatedData);
 
-    const { user, tokens } = await userService.login(validatedData);
+    if (!result.requiresOtp) {
+      // 2FA off — set cookies and respond like verify-otp does
+      res.cookie('refreshToken', result.tokens.refreshToken, {
+        ...cookieBase,
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        path: '/api/auth/refresh',
+      });
+      res.cookie('accessToken', result.tokens.accessToken, {
+        ...cookieBase,
+        maxAge: 15 * 60 * 1000,
+      });
+      return res.status(200).json({
+        status: 'success',
+        message: 'Login successful',
+        data: {
+          requiresOtp: false,
+          user: {
+            id: result.user.id,
+            email: result.user.email,
+            username: result.user.username,
+            role: result.user.role,
+          },
+        },
+      });
+    }
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Verification code sent to your email',
+      data: { requiresOtp: true, email: result.email },
+    });
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Validation failed',
+        errors: formatValidationError(error),
+      });
+    }
+    return res.status(401).json({ status: 'error', message: 'Invalid email or password' });
+  }
+});
+
+// Step 2 of login: verify the OTP, then issue tokens exactly as the old /login did.
+router.post('/verify-otp', otpLimiter, async (req: Request, res: Response) => {
+  try {
+    const { email, code } = otpSchema.parse(req.body);
+
+    const { user, tokens } = await userService.verifyOtp(email, code);
 
     res.cookie('refreshToken', tokens.refreshToken, {
       ...cookieBase,
@@ -134,9 +197,10 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
       });
     }
 
+    const message = error instanceof Error ? error.message : 'Verification failed';
     return res.status(401).json({
       status: 'error',
-      message: 'Invalid email or password',
+      message,
     });
   }
 });
@@ -229,6 +293,7 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
         role: user.role,
         isActive: user.is_active,
         lastLogin: user.last_login,
+        twoFaEnabled: user.two_fa_enabled,
       },
     });
   } catch (error) {

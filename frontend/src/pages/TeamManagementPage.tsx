@@ -3,6 +3,11 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useParams, Link } from 'react-router-dom';
 import { AppDispatch, RootState } from '../store';
 import { Layout } from '../components/Layout';
+import { Toast } from '../components/Toast';
+import { OnlineUserList } from '../components/OnlineUserList';
+import { TypingIndicator } from '../components/TypingIndicator';
+import { ActivityFeed } from '../components/ActivityFeed';
+import { useSocket } from '../hooks/useSocket';
 import {
   fetchWorkspace,
   fetchMembers,
@@ -14,7 +19,37 @@ import {
   clearWorkspaceError,
   clearWorkspaceSuccess,
 } from '../store/slices/workspaceSlice';
-import '../styles/profile.css';
+import '../styles/workspace-dashboard.css';
+
+const SettingsGearIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" width="15" height="15">
+    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
+    <path
+      d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const MailPlusIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" width="16" height="16">
+    <rect x="3.5" y="5.5" width="17" height="13" rx="1.8" stroke="currentColor" strokeWidth="1.8" />
+    <path d="m4.5 7 7.5 6 7.5-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const PeopleIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" width="16" height="16">
+    <path d="M8 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" strokeWidth="1.7" />
+    <path d="M2.5 19c0-2.5 2.4-4.3 5.5-4.3s5.5 1.8 5.5 4.3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    <path d="M15 8a2.5 2.5 0 1 0 0-5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    <path d="M17 14.3c2.2.4 3.8 1.8 3.8 3.7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+  </svg>
+);
+
+const initials = (name?: string) => (name || '?').charAt(0).toUpperCase();
 
 export const TeamManagementPage: React.FC = () => {
   const { workspaceId } = useParams<{ workspaceId: string }>();
@@ -23,6 +58,8 @@ export const TeamManagementPage: React.FC = () => {
   const { currentWorkspace, members, invites, isLoading, isMutating, error, successMessage } = useSelector(
     (state: RootState) => state.workspace
   );
+
+  const { joinRoom, leaveRoom, startTyping, stopTyping, broadcastActivity } = useSocket();
 
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin' | 'member'>('member');
@@ -40,25 +77,15 @@ export const TeamManagementPage: React.FC = () => {
     };
   }, [dispatch, workspaceId]);
 
-  // Auto-dismiss the success alert after a few seconds
+  // Join this workspace's real-time room for presence + typing + activity,
+  // and leave it automatically when navigating away.
   useEffect(() => {
-    if (successMessage) {
-      const timer = setTimeout(() => {
-        dispatch(clearWorkspaceSuccess());
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [successMessage, dispatch]);
-
-  // Auto-dismiss the error alert after a few seconds too
-  useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => {
-        dispatch(clearWorkspaceError());
-      }, 4000);
-      return () => clearTimeout(timer);
-    }
-  }, [error, dispatch]);
+    if (!workspaceId) return;
+    joinRoom(workspaceId);
+    return () => {
+      leaveRoom(workspaceId);
+    };
+  }, [workspaceId]);
 
   const myRole = currentWorkspace?.role;
   const canManage = myRole === 'owner' || myRole === 'admin';
@@ -72,18 +99,34 @@ export const TeamManagementPage: React.FC = () => {
     }
     setInviteError('');
     dispatch(inviteMember({ workspaceId, email: inviteEmail.trim(), role: inviteRole })).then((res: any) => {
-      if (!res.error) setInviteEmail('');
+      if (!res.error) {
+        setInviteEmail('');
+        broadcastActivity(workspaceId, `invited ${inviteEmail.trim()} to the workspace`);
+      }
     });
+  };
+
+  const handleInviteEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInviteEmail(e.target.value);
+    if (!workspaceId) return;
+    startTyping(workspaceId, 'invite-form');
+  };
+
+  const handleInviteEmailBlur = () => {
+    if (!workspaceId) return;
+    stopTyping(workspaceId);
   };
 
   const handleRoleChange = (userId: string, role: 'admin' | 'member') => {
     if (!workspaceId) return;
     dispatch(updateMemberRole({ workspaceId, userId, role }));
+    broadcastActivity(workspaceId, `updated a member's role to ${role}`);
   };
 
   const handleRemove = (userId: string) => {
     if (!workspaceId) return;
     dispatch(removeMember({ workspaceId, userId }));
+    broadcastActivity(workspaceId, 'removed a member from the workspace');
     setConfirmRemove(null);
   };
 
@@ -96,184 +139,163 @@ export const TeamManagementPage: React.FC = () => {
 
   return (
     <Layout title={currentWorkspace ? `${currentWorkspace.name} — Team` : 'Team'}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-        <Link
-          to={`/workspaces/${workspaceId}/settings`}
-          style={{
-            color: '#a78bfa',
-            border: '1px solid rgba(124,58,237,0.5)',
-            borderRadius: '0.5rem',
-            padding: '0.5rem 1rem',
-            textDecoration: 'none',
-            fontSize: '0.9rem',
-          }}
-        >
-          ⚙️ Workspace Settings
+      <div className="ws-toolbar">
+        <Link to={`/workspaces/${workspaceId}/settings`} className="ws-toolbar-link">
+          <SettingsGearIcon /> Workspace Settings
         </Link>
       </div>
 
-      {error && <div className="alert alert-error">{error}</div>}
-      {successMessage && <div className="alert alert-success">{successMessage}</div>}
-
-      {canManage && (
-        <div className="profile-card narrow" style={{ marginBottom: '2rem' }}>
-          <h2 style={{ marginTop: 0 }}>Invite a member</h2>
-          <form onSubmit={handleInvite} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-            <div className="form-group" style={{ flex: '2 1 220px', margin: 0 }}>
-              <input
-                type="email"
-                className="form-input"
-                placeholder="teammate@email.com"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-              />
-              {inviteError && <span className="error-text">{inviteError}</span>}
-            </div>
-            <select
-              className="form-input"
-              style={{ flex: '1 1 120px', color: '#fff', background: '#1e1b3a' }}
-              value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value as 'admin' | 'member')}
-            >
-              <option value="member" style={{ color: '#fff', background: '#1e1b3a' }}>Member</option>
-              <option value="admin" style={{ color: '#fff', background: '#1e1b3a' }}>Admin</option>
-            </select>
-            <button type="submit" className="btn-save" disabled={isMutating} style={{ flex: '0 0 auto' }}>
-              {isMutating ? 'Sending...' : 'Send Invite'}
-            </button>
-          </form>
-        </div>
-      )}
-
-      {canManage && invites.length > 0 && (
-        <div style={{ marginBottom: '2rem' }}>
-          <h3 style={{ color: 'rgba(255,255,255,0.8)' }}>Pending Invites</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {invites.map((inv) => (
-              <div
-                key={inv.id}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '0.75rem 1rem',
-                  borderRadius: '0.5rem',
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                }}
-              >
+      <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div style={{ flex: '2 1 480px', minWidth: 0 }}>
+          {canManage && (
+            <div className="ws-profile-card narrow" style={{ marginBottom: '1.5rem' }}>
+              <div className="ws-section-head">
+                <div className="ws-section-icon"><MailPlusIcon /></div>
                 <div>
-                  <div style={{ color: '#fff' }}>{inv.email}</div>
-                  <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' }}>
-                    Invited as {inv.role} · expires {new Date(inv.expires_at).toLocaleDateString()}
+                  <h2>Invite a member</h2>
+                  <p>They'll receive an email invite to join this workspace.</p>
+                </div>
+              </div>
+              <form onSubmit={handleInvite} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                <div className="ws-form-group" style={{ flex: '2 1 220px', margin: 0 }}>
+                  <input
+                    type="email"
+                    className="ws-form-input"
+                    placeholder="teammate@email.com"
+                    value={inviteEmail}
+                    onChange={handleInviteEmailChange}
+                    onBlur={handleInviteEmailBlur}
+                  />
+                  {inviteError && <span className="ws-error-text">{inviteError}</span>}
+                  <div style={{ marginTop: '0.5rem' }}>
+                    <TypingIndicator workspaceId={workspaceId} context="invite-form" />
                   </div>
                 </div>
-                <button
-                  onClick={() => handleRevokeInvite(inv.id)}
-                  style={{
-                    background: 'none',
-                    border: '1px solid rgba(239,68,68,0.5)',
-                    color: '#ef4444',
-                    borderRadius: '0.4rem',
-                    padding: '0.35rem 0.75rem',
-                    cursor: 'pointer',
-                  }}
+                <select
+                  className="ws-form-input"
+                  style={{ flex: '1 1 120px', color: '#fff', background: '#1e1b3a' }}
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value as 'admin' | 'member')}
                 >
-                  Revoke
+                  <option value="member" style={{ color: '#fff', background: '#1e1b3a' }}>Member</option>
+                  <option value="admin" style={{ color: '#fff', background: '#1e1b3a' }}>Admin</option>
+                </select>
+                <button type="submit" className="ws-btn-save" disabled={isMutating} style={{ flex: '0 0 auto' }}>
+                  {isMutating ? 'Sending...' : 'Send Invite'}
                 </button>
+              </form>
+            </div>
+          )}
+
+          {canManage && invites.length > 0 && (
+            <div className="ws-profile-card narrow" style={{ marginBottom: '1.5rem' }}>
+              <div className="ws-section-head">
+                <div className="ws-section-icon"><MailPlusIcon /></div>
+                <div>
+                  <h2>Pending Invites</h2>
+                  <p>{invites.length} invite{invites.length === 1 ? '' : 's'} awaiting response.</p>
+                </div>
               </div>
-            ))}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                {invites.map((inv) => (
+                  <div key={inv.id} className="ws-invite-row">
+                    <div>
+                      <div className="ws-invite-email">{inv.email}</div>
+                      <div className="ws-invite-meta">
+                        Invited as {inv.role} · expires {new Date(inv.expires_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <button onClick={() => handleRevokeInvite(inv.id)} className="ws-btn-danger-outline">
+                      Revoke
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="ws-profile-card narrow">
+            <div className="ws-section-head">
+              <div className="ws-section-icon"><PeopleIcon /></div>
+              <div>
+                <h2>Members</h2>
+                <p>{members.length} member{members.length === 1 ? '' : 's'} in this workspace.</p>
+              </div>
+            </div>
+
+            {isLoading ? (
+              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem' }}>Loading members...</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                {members.map((m) => {
+                  const isMe = m.user_id === user?.id;
+                  return (
+                    <div key={m.id} className="ws-member-row">
+                      <div className="ws-member-left">
+                        <div className="ws-member-avatar">{initials(m.username)}</div>
+                        <div style={{ minWidth: 0 }}>
+                          <div className="ws-member-name">
+                            {m.username} {isMe && <span className="ws-member-you">(you)</span>}
+                          </div>
+                          <div className="ws-member-email">{m.email}</div>
+                        </div>
+                      </div>
+
+                      <div className="ws-member-actions">
+                        {myRole === 'owner' && m.role !== 'owner' ? (
+                          <select
+                            className="ws-role-select"
+                            value={m.role}
+                            onChange={(e) => handleRoleChange(m.user_id, e.target.value as 'admin' | 'member')}
+                          >
+                            <option value="member">Member</option>
+                            <option value="admin">Admin</option>
+                          </select>
+                        ) : (
+                          <span className={`ws-role-static ${m.role === 'owner' ? 'owner' : ''}`}>{m.role}</span>
+                        )}
+
+                        {canManage && m.role !== 'owner' && !isMe && (
+                          confirmRemove === m.user_id ? (
+                            <>
+                              <button onClick={() => handleRemove(m.user_id)} className="ws-btn-danger">
+                                Confirm
+                              </button>
+                              <button onClick={() => setConfirmRemove(null)} className="ws-btn-ghost">
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <button onClick={() => setConfirmRemove(m.user_id)} className="ws-btn-danger-outline">
+                              Remove
+                            </button>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
-      )}
 
-      <h3 style={{ color: 'rgba(255,255,255,0.8)' }}>Members</h3>
-      {isLoading ? (
-        <p style={{ color: 'rgba(255,255,255,0.6)' }}>Loading members...</p>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          {members.map((m) => {
-            const isMe = m.user_id === user?.id;
-            return (
-              <div
-                key={m.id}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '0.75rem 1rem',
-                  borderRadius: '0.5rem',
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  flexWrap: 'wrap',
-                  gap: '0.5rem',
-                }}
-              >
-                <div>
-                  <div style={{ color: '#fff' }}>
-                    {m.username} {isMe && <span style={{ color: 'rgba(255,255,255,0.4)' }}>(you)</span>}
-                  </div>
-                  <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)' }}>{m.email}</div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  {myRole === 'owner' && m.role !== 'owner' ? (
-                    <select
-                      className="form-input"
-                      style={{ padding: '0.35rem 0.5rem', width: 'auto', color: '#fff', background: '#1e1b3a' }}
-                      value={m.role}
-                      onChange={(e) => handleRoleChange(m.user_id, e.target.value as 'admin' | 'member')}
-                    >
-                      <option value="member" style={{ color: '#fff', background: '#1e1b3a' }}>Member</option>
-                      <option value="admin" style={{ color: '#fff', background: '#1e1b3a' }}>Admin</option>
-                    </select>
-                  ) : (
-                    <span
-                      style={{
-                        fontSize: '0.7rem',
-                        fontWeight: 700,
-                        textTransform: 'uppercase',
-                        padding: '0.15rem 0.5rem',
-                        borderRadius: '999px',
-                        color: 'rgba(255,255,255,0.7)',
-                        border: '1px solid rgba(255,255,255,0.3)',
-                      }}
-                    >
-                      {m.role}
-                    </span>
-                  )}
-
-                  {canManage && m.role !== 'owner' && !isMe && (
-                    confirmRemove === m.user_id ? (
-                      <>
-                        <button
-                          onClick={() => handleRemove(m.user_id)}
-                          style={{ background: '#ef4444', border: 'none', color: '#fff', borderRadius: '0.4rem', padding: '0.35rem 0.6rem', cursor: 'pointer' }}
-                        >
-                          Confirm
-                        </button>
-                        <button
-                          onClick={() => setConfirmRemove(null)}
-                          style={{ background: 'none', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', borderRadius: '0.4rem', padding: '0.35rem 0.6rem', cursor: 'pointer' }}
-                        >
-                          Cancel
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        onClick={() => setConfirmRemove(m.user_id)}
-                        style={{ background: 'none', border: '1px solid rgba(239,68,68,0.5)', color: '#ef4444', borderRadius: '0.4rem', padding: '0.35rem 0.6rem', cursor: 'pointer' }}
-                      >
-                        Remove
-                      </button>
-                    )
-                  )}
-                </div>
-              </div>
-            );
-          })}
+        {/* Real-time sidebar */}
+        <div style={{ flex: '1 1 320px', minWidth: '300px', position: 'sticky', top: '1.5rem' }}>
+          <OnlineUserList workspaceId={workspaceId} />
+          <ActivityFeed workspaceId={workspaceId} />
         </div>
-      )}
+      </div>
+
+      <Toast
+        message={error || successMessage || ''}
+        variant={error ? 'error' : 'success'}
+        isVisible={!!(error || successMessage)}
+        onClose={() => {
+          dispatch(clearWorkspaceError());
+          dispatch(clearWorkspaceSuccess());
+        }}
+      />
     </Layout>
   );
 };

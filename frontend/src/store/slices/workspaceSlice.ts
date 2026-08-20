@@ -46,12 +46,22 @@ export interface PendingInvitation {
   created_at: string;
 }
 
+export interface ActivityItem {
+  type: 'invite' | 'member_joined' | 'workspace_updated';
+  occurred_at: string;
+  workspace_name: string;
+  target: string | null;
+  actor_name: string | null;
+}
+
 interface WorkspaceState {
   workspaces: Workspace[];
   currentWorkspace: Workspace | null;
   members: Member[];
   invites: Invite[];
   pendingInvitations: PendingInvitation[];
+  recentActivity: ActivityItem[];
+  isLoadingActivity: boolean;
   isLoading: boolean;
   isMutating: boolean;
   error: string | null;
@@ -64,6 +74,8 @@ const initialState: WorkspaceState = {
   members: [],
   invites: [],
   pendingInvitations: [],
+  recentActivity: [],
+  isLoadingActivity: false,
   isLoading: false,
   isMutating: false,
   error: null,
@@ -267,6 +279,18 @@ export const declineInvite = createAsyncThunk(
   }
 );
 
+export const fetchRecentActivity = createAsyncThunk(
+  'workspace/fetchRecentActivity',
+  async (_, { rejectWithValue }) => {
+    try {
+      const res = await apiClient.get<{ data: ActivityItem[] }>('/workspaces/activity/recent');
+      return res.data.data;
+    } catch (err: any) {
+      return rejectWithValue(errMsg(err, 'Failed to load recent activity'));
+    }
+  }
+);
+
 const workspaceSlice = createSlice({
   name: 'workspace',
   initialState,
@@ -438,6 +462,17 @@ const workspaceSlice = createSlice({
       })
       .addCase(transferOwnership.rejected, (state, action) => {
         state.error = action.payload as string;
+      })
+      // recent activity
+      .addCase(fetchRecentActivity.pending, (state) => {
+        state.isLoadingActivity = true;
+      })
+      .addCase(fetchRecentActivity.fulfilled, (state, action: PayloadAction<ActivityItem[]>) => {
+        state.isLoadingActivity = false;
+        state.recentActivity = action.payload;
+      })
+      .addCase(fetchRecentActivity.rejected, (state) => {
+        state.isLoadingActivity = false;
       });
   },
 });

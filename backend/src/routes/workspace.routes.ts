@@ -9,6 +9,9 @@ const router = Router();
 
 router.use(authenticate);
 
+// Activity feed — must come before /:workspaceId to avoid being swallowed by that param route
+router.get('/activity/recent', workspaceController.getRecentActivity.bind(workspaceController));
+
 // Workspace CRUD
 router.post('/', validate(createWorkspaceSchema), workspaceController.createWorkspace.bind(workspaceController));
 router.get('/', workspaceController.getWorkspacesForUser.bind(workspaceController));

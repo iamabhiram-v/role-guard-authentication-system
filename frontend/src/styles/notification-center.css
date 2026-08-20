@@ -1,0 +1,558 @@
+@property --nc-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes nc-rotate-glow { to { --nc-angle: 360deg; } }
+@keyframes nc-fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes nc-pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+@keyframes nc-shimmer { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+@keyframes nc-count-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes nc-select-bar-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+
+.nc-container {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.nc-subtitle {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.88rem;
+  margin: -0.5rem 0 1.5rem;
+}
+
+/* ================= Stat cards ================= */
+.nc-stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.nc-stat-card {
+  position: relative;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
+  padding: 1.05rem 1.2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  transition: border-color 0.15s ease;
+}
+
+.nc-stat-card:hover {
+  border-color: color-mix(in srgb, var(--nc-accent, #7c3aed) 40%, transparent);
+}
+
+.nc-stat-icon {
+  width: 2.3rem;
+  height: 2.3rem;
+  border-radius: 0.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--nc-accent, #7c3aed) 16%, transparent);
+  color: var(--nc-accent, #7c3aed);
+  flex-shrink: 0;
+}
+
+.nc-stat-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.nc-stat-label {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.67rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.nc-stat-value {
+  color: #fff;
+  font-size: 1.55rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  animation: nc-count-in 0.25s ease both;
+}
+
+/* ================= Toolbar ================= */
+.nc-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.nc-search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 220px;
+}
+
+.nc-search-icon {
+  position: absolute;
+  left: 0.9rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.nc-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 0.55rem;
+  padding: 0.58rem 0.9rem 0.58rem 2.35rem;
+  color: #fff;
+  font-size: 0.84rem;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.nc-search-input::placeholder { color: rgba(255, 255, 255, 0.32); }
+
+.nc-search-input:focus {
+  border-color: rgba(124, 58, 237, 0.6);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.14);
+}
+
+.nc-segmented {
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 0.55rem;
+  padding: 0.2rem;
+  gap: 0.1rem;
+}
+
+.nc-segmented-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.42rem 0.85rem;
+  border-radius: 0.4rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+}
+
+.nc-segmented-btn.active {
+  background: #7c3aed;
+  color: #fff;
+}
+
+.nc-mark-all-btn {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 0.55rem;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.53rem 0.85rem;
+  font-family: inherit;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+}
+
+.nc-mark-all-btn:hover {
+  background: rgba(124, 58, 237, 0.1);
+  border-color: rgba(124, 58, 237, 0.35);
+  color: #a78bfa;
+}
+
+/* ================= Bulk select bar — contextual, only shown when active ================= */
+.nc-select-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0.9rem;
+  margin-bottom: 0.6rem;
+  border-radius: 0.55rem;
+  background: rgba(124, 58, 237, 0.07);
+  border: 1px solid rgba(124, 58, 237, 0.28);
+  font-size: 0.78rem;
+  animation: nc-select-bar-in 0.15s ease both;
+}
+
+.nc-select-all {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.nc-select-all input {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.nc-select-all input:checked {
+  background: #7c3aed;
+  border-color: #7c3aed;
+}
+
+.nc-select-all input:checked::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(20% 48%, 40% 68%, 82% 22%, 92% 32%, 40% 88%, 8% 56%);
+  background: #fff;
+}
+
+.nc-select-count {
+  color: #d8b4fe;
+  font-weight: 700;
+}
+
+.nc-select-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.nc-select-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(124, 58, 237, 0.15);
+  border: 1px solid rgba(124, 58, 237, 0.4);
+  color: #d8b4fe;
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 0.38rem 0.7rem;
+  border-radius: 0.4rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.nc-select-action-btn:hover { background: rgba(124, 58, 237, 0.28); }
+
+.nc-select-action-btn.danger {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+}
+
+.nc-select-action-btn.danger:hover { background: rgba(239, 68, 68, 0.22); }
+.nc-select-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.nc-select-clear {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.74rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.nc-select-clear:hover { color: rgba(255, 255, 255, 0.7); }
+
+/* ================= Panel ================= */
+.nc-panel {
+  background: rgba(255, 255, 255, 0.018);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  min-height: 200px;
+}
+
+.nc-group-label {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.8rem 1.3rem 0.55rem;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* ================= Row ================= */
+.nc-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  padding: 0.95rem 1.3rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+  border-left: 2px solid transparent;
+  cursor: default;
+  transition: background 0.15s ease, border-left-color 0.15s ease;
+}
+
+.nc-row:last-child { border-bottom: none; }
+
+.nc-row.unread {
+  cursor: pointer;
+  background: rgba(124, 58, 237, 0.02);
+}
+
+.nc-row.selected {
+  background: rgba(124, 58, 237, 0.07);
+  border-left-color: rgba(124, 58, 237, 0.55);
+}
+
+.nc-row:hover { background: rgba(255, 255, 255, 0.025); }
+.nc-row.selected:hover { background: rgba(124, 58, 237, 0.09); }
+
+.nc-row:hover .nc-mark-btn,
+.nc-row:hover .nc-delete-btn {
+  opacity: 1;
+}
+
+/* Checkbox — separate element to the left of the avatar, hidden until
+   the row is hovered, selected, or the panel is in "selecting" mode.
+   Kept as its own sibling (not overlapping the avatar) so it never
+   renders as an ambiguous blank box. */
+.nc-row-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 15px;
+  height: 15px;
+  margin-top: 0.6rem;
+  border-radius: 4px;
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.nc-row:hover .nc-row-checkbox,
+.nc-panel.selecting .nc-row-checkbox,
+.nc-row.selected .nc-row-checkbox {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.nc-row-checkbox:checked {
+  background: #7c3aed;
+  border-color: #7c3aed;
+}
+
+.nc-row-checkbox:checked::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(22% 48%, 40% 66%, 80% 24%, 90% 34%, 40% 86%, 10% 56%);
+  background: #fff;
+}
+
+.nc-avatar {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 0.65rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.nc-row-body {
+  min-width: 0;
+  flex: 1;
+  padding-top: 0.1rem;
+}
+
+.nc-row-top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.28rem;
+  flex-wrap: wrap;
+}
+
+.nc-row-title {
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.nc-row-badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 0.35rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+}
+
+.nc-row-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: nc-pulse-dot 2s ease-in-out infinite;
+}
+
+.nc-row-message {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  margin-bottom: 0.35rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+          line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.nc-row-time {
+  color: rgba(255, 255, 255, 0.32);
+  font-size: 0.73rem;
+  font-weight: 500;
+}
+
+.nc-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+
+.nc-mark-btn,
+.nc-delete-btn {
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.45rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.nc-mark-btn:hover { background: rgba(124, 58, 237, 0.28); color: #c4b5fd; }
+.nc-delete-btn:hover { background: rgba(239, 68, 68, 0.16); color: #f87171; }
+
+/* ================= Skeleton ================= */
+.nc-skeleton-row {
+  display: flex;
+  gap: 1rem;
+  padding: 0.95rem 1.3rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+}
+
+.nc-skeleton-avatar {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 0.65rem;
+  background: rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+  animation: nc-shimmer 1.4s ease-in-out infinite;
+}
+
+.nc-skeleton-line {
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  margin-bottom: 0.5rem;
+  animation: nc-shimmer 1.4s ease-in-out infinite;
+}
+
+.nc-skeleton-line.short { width: 32%; height: 0.78rem; }
+.nc-skeleton-line.long { width: 68%; height: 0.68rem; margin-bottom: 0; background: rgba(255, 255, 255, 0.035); }
+
+/* ================= Empty state ================= */
+.nc-empty-state {
+  padding: 4rem 2rem;
+  text-align: center;
+}
+
+.nc-empty-icon { display: flex; justify-content: center; margin-bottom: 0.85rem; }
+
+.nc-empty-icon-ring {
+  width: 3.2rem;
+  height: 3.2rem;
+  border-radius: 50%;
+  background: rgba(124, 58, 237, 0.1);
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nc-empty-title { color: rgba(255, 255, 255, 0.6); font-size: 0.9rem; font-weight: 600; margin: 0; }
+.nc-empty-subtitle { color: rgba(255, 255, 255, 0.33); font-size: 0.79rem; margin-top: 0.3rem; }
+
+/* ================= Pagination ================= */
+.nc-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  margin-top: 1.3rem;
+}
+
+.nc-page-btn {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  color: #fff;
+  font-size: 0.79rem;
+  font-weight: 600;
+  padding: 0.42rem 0.85rem;
+  border-radius: 0.45rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.nc-page-btn:not(:disabled):hover {
+  background: rgba(124, 58, 237, 0.12);
+  border-color: rgba(124, 58, 237, 0.4);
+}
+
+.nc-page-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.nc-pagination-info { color: rgba(255, 255, 255, 0.45); font-size: 0.79rem; padding: 0 0.5rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+.nc-search-input:focus-visible,
+.nc-segmented-btn:focus-visible,
+.nc-mark-all-btn:focus-visible,
+.nc-mark-btn:focus-visible,
+.nc-delete-btn:focus-visible,
+.nc-page-btn:focus-visible,
+.nc-select-action-btn:focus-visible,
+.nc-row-checkbox:focus-visible,
+.nc-select-all input:focus-visible {
+  outline: 2px solid rgba(167, 139, 250, 0.75);
+  outline-offset: 2px;
+}

@@ -8,6 +8,9 @@ export interface User {
   last_login: Date | null; 
   created_at: Date;       
   updated_at: Date;       
+  otp_code_hash: string | null;
+  otp_expires_at: Date | null;
+  two_fa_enabled: boolean;
 }
 
 export interface UserResponse {

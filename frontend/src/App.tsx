@@ -11,8 +11,15 @@ import { WorkspaceDashboard } from './pages/WorkspaceDashboard';
 import { WorkspaceSettings } from './pages/WorkspaceSettings';
 import { TeamManagementPage } from './pages/TeamManagementPage';
 import { AcceptInvitePage } from './pages/AcceptInvitePage';
+import { QueueDashboardPage } from './pages/QueueDashboardPage';
+import { NotificationPreferencesPage } from './pages/NotificationPreferencesPage';
+import { NotificationCenterPage } from './pages/NotificationCenterPage';
+import { AnalyticsDashboardPage } from './pages/AnalyticsDashboardPage';
+import { ServiceStatusPage } from './pages/ServiceStatusPage';
+import { PaymentPage } from './pages/PaymentPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { fetchCurrentUser } from './store/slices/authSlice';
+import { useSocket } from './hooks/useSocket';
 import { AppDispatch, RootState } from './store';
 
 const Unauthorized = () => (
@@ -67,15 +74,15 @@ function App() {
   const dispatch = useDispatch<AppDispatch>();
   const { isAuthenticated, isInitialized } = useSelector((state: RootState) => state.auth);
 
+  useSocket(); // connects/disconnects the real-time socket based on isAuthenticated
+
   useEffect(() => {
     // Reads the session from the httpOnly cookie automatically —
     // no token needs to be manually restored on the client.
     dispatch(fetchCurrentUser());
   }, [dispatch]);
 
-  // On first load we haven't checked the cookie-based session yet.
-  // Wait for that check before deciding to show login vs. protected content,
-  // otherwise a logged-in user briefly flashes the login page on refresh.
+ 
   if (!isInitialized) {
     return <FullScreenLoader />;
   }
@@ -102,6 +109,33 @@ function App() {
         />
 
         <Route
+          path="/analytics"
+          element={
+            <ProtectedRoute>
+              <AnalyticsDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/service-status"
+          element={
+            <ProtectedRoute>
+              <ServiceStatusPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/payments"
+          element={
+            <ProtectedRoute>
+              <PaymentPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
           path="/profile"
           element={
             <ProtectedRoute>
@@ -115,6 +149,24 @@ function App() {
           element={
             <ProtectedRoute>
               <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/settings/notifications"
+          element={
+            <ProtectedRoute>
+              <NotificationPreferencesPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute>
+              <NotificationCenterPage />
             </ProtectedRoute>
           }
         />
@@ -160,6 +212,15 @@ function App() {
           element={
             <ProtectedRoute>
               <AcceptInvitePage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/queue"
+          element={
+            <ProtectedRoute requiredRoles={['admin']}>
+              <QueueDashboardPage />
             </ProtectedRoute>
           }
         />

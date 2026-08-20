@@ -14,6 +14,7 @@ interface Profile {
   created_at?: string;
   last_login?: string;
   updated_at: string;
+  two_fa_enabled?: boolean;
 }
 
 interface ProfileState {
@@ -83,6 +84,36 @@ export const deleteAccount = createAsyncThunk(
   }
 );
 
+export const toggle2FA = createAsyncThunk(
+  'profile/toggle2FA',
+  async (enabled: boolean, { rejectWithValue }) => {
+    try {
+      const res = await apiClient.patch<{ data: Profile }>('/profile/2fa', { enabled });
+      return res.data.data;
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.message || 'Failed to update 2FA setting');
+    }
+  }
+);
+
+export const uploadAvatar = createAsyncThunk(
+  'profile/uploadAvatar',
+  async (file: File, { rejectWithValue }) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await apiClient.post<{ data: { avatarUrl: string; profile: Profile } }>(
+        '/upload/avatar',
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+      return res.data.data.profile;
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.message || 'Failed to upload photo');
+    }
+  }
+);
+
 const profileSlice = createSlice({
   name: 'profile',
   initialState,
@@ -114,7 +145,9 @@ const profileSlice = createSlice({
       })
       .addCase(updateProfile.fulfilled, (state, action: PayloadAction<Profile>) => {
         state.isUpdating = false;
-        state.profile = action.payload;
+        // Merge instead of replace — protects against any future endpoint
+        // that returns a partial profile object from silently wiping fields.
+        state.profile = state.profile ? { ...state.profile, ...action.payload } : action.payload;
         state.successMessage = 'Profile updated successfully';
       })
       .addCase(updateProfile.rejected, (state, action) => {
@@ -138,6 +171,34 @@ const profileSlice = createSlice({
         state.error = null;
       })
       .addCase(deleteAccount.rejected, (state, action) => {
+        state.isUpdating = false;
+        state.error = action.payload as string;
+      })
+      .addCase(uploadAvatar.pending, (state) => {
+        state.isUpdating = true;
+        state.error = null;
+      })
+      .addCase(uploadAvatar.fulfilled, (state, action: PayloadAction<Profile>) => {
+        state.isUpdating = false;
+        state.profile = state.profile ? { ...state.profile, ...action.payload } : action.payload;
+        state.successMessage = 'Profile photo updated';
+      })
+      .addCase(uploadAvatar.rejected, (state, action) => {
+        state.isUpdating = false;
+        state.error = action.payload as string;
+      })
+      .addCase(toggle2FA.pending, (state) => {
+        state.isUpdating = true;
+        state.error = null;
+      })
+      .addCase(toggle2FA.fulfilled, (state, action: PayloadAction<Profile>) => {
+        state.isUpdating = false;
+        state.profile = state.profile ? { ...state.profile, ...action.payload } : action.payload;
+        state.successMessage = action.payload.two_fa_enabled
+          ? 'Two-factor authentication enabled'
+          : 'Two-factor authentication disabled';
+      })
+      .addCase(toggle2FA.rejected, (state, action) => {
         state.isUpdating = false;
         state.error = action.payload as string;
       });

@@ -2,6 +2,59 @@
   box-sizing: border-box;
 }
 
+@property --angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+/* ================= KEYFRAMES ================= */
+
+@keyframes rotate-glow {
+  to { --angle: 360deg; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scan-sweep {
+  0% { transform: translateX(-150%) skewX(-12deg); }
+  100% { transform: translateX(250%) skewX(-12deg); }
+}
+
+@keyframes avatar-pulse {
+  0%, 100% { box-shadow: 0 4px 14px rgba(59, 130, 246, 0.45), 0 0 0 0 rgba(59,130,246,0.4); }
+  50% { box-shadow: 0 4px 20px rgba(59, 130, 246, 0.65), 0 0 0 6px rgba(59,130,246,0); }
+}
+
+@keyframes orb-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-18px, 14px) scale(1.06); }
+}
+
+@keyframes orb-drift-alt {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(16px, -12px) scale(1.05); }
+}
+
+@keyframes count-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes btn-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(180%); }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+/* ================= Shell ================= */
 .dashboard-shell {
   position: relative;
   display: flex;
@@ -23,7 +76,6 @@
   z-index: 0;
 }
 
-/* subtle dot-grid texture across the whole shell, very low opacity */
 .dashboard-shell::after {
   content: '';
   position: fixed;
@@ -34,7 +86,7 @@
   z-index: 0;
 }
 
-/* ---------- Sidebar shell (contents styled inline in Sidebar.tsx) ---------- */
+/* ---------- Sidebar shell ---------- */
 .dashboard-sidebar {
   position: relative;
   z-index: 1;
@@ -73,7 +125,6 @@
   overflow-x: hidden;
 }
 
-/* decorative floating gradient orbs — pure visual texture, non-interactive */
 .dashboard-main::before {
   content: '';
   position: absolute;
@@ -86,6 +137,7 @@
   filter: blur(10px);
   pointer-events: none;
   z-index: -1;
+  animation: orb-drift 14s ease-in-out infinite;
 }
 
 .dashboard-main::after {
@@ -100,6 +152,12 @@
   filter: blur(10px);
   pointer-events: none;
   z-index: -1;
+  animation: orb-drift-alt 18s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-main::before,
+  .dashboard-main::after { animation: none; }
 }
 
 .dashboard-header {
@@ -125,6 +183,7 @@
 }
 
 .logout-btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -138,6 +197,18 @@
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   box-shadow: 0 4px 14px rgba(239, 68, 68, 0.25);
+  overflow: hidden;
+}
+
+.logout-btn::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(115deg, transparent, rgba(255,255,255,0.4), transparent);
+  transform: translateX(-100%);
+  pointer-events: none;
 }
 
 .logout-btn:hover {
@@ -145,15 +216,23 @@
   box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
 }
 
+.logout-btn:hover::after {
+  animation: btn-shimmer 0.8s ease;
+}
+
 .logout-btn:active {
   transform: translateY(0);
 }
 
-/* ---------- Welcome card (Dashboard page) ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .logout-btn::after { display: none; }
+}
+
+/* ---------- Welcome card — animated rotating border + scanline ---------- */
 .welcome-card {
   position: relative;
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.16), rgba(124, 58, 237, 0.16));
-  border: 1px solid rgba(124, 58, 237, 0.28);
+  border: 1px solid transparent;
   border-radius: 1.2rem;
   padding: 2.5rem;
   backdrop-filter: blur(14px);
@@ -164,17 +243,16 @@
 .welcome-card::before {
   content: '';
   position: absolute;
-  top: -60%;
-  left: -10%;
-  width: 55%;
-  height: 220%;
-  background: linear-gradient(
-    120deg,
-    transparent 30%,
-    rgba(255, 255, 255, 0.07) 45%,
-    transparent 60%
-  );
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: conic-gradient(from var(--angle, 0deg), transparent 0%, rgba(96,165,250,0.6) 12%, transparent 26%, transparent 55%, rgba(167,139,250,0.55) 70%, transparent 85%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: rotate-glow 7s linear infinite;
   pointer-events: none;
+  z-index: 0;
 }
 
 .welcome-card::after {
@@ -187,11 +265,34 @@
   background: radial-gradient(circle, rgba(124, 58, 237, 0.35), transparent 70%);
   border-radius: 50%;
   pointer-events: none;
+  animation: orb-drift 10s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .welcome-card::before,
+  .welcome-card::after { animation: none; }
 }
 
 .welcome-content {
   position: relative;
   z-index: 1;
+}
+
+.welcome-content::before {
+  content: '';
+  position: absolute;
+  top: -2.5rem;
+  left: -2.5rem;
+  width: 35%;
+  height: calc(100% + 5rem);
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.06), transparent);
+  transform: translateX(-200%) skewX(-12deg);
+  pointer-events: none;
+  animation: scan-sweep 2.4s ease 0.3s 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .welcome-content::before { display: none; }
 }
 
 .welcome-content .welcome-title {
@@ -220,6 +321,12 @@
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 0.85rem;
   padding: 0.9rem 1.35rem;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.user-info:hover {
+  border-color: rgba(59, 130, 246, 0.4);
+  transform: translateY(-1px);
 }
 
 .user-avatar {
@@ -234,7 +341,11 @@
   color: #fff;
   font-size: 1.05rem;
   flex-shrink: 0;
-  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.45);
+  animation: avatar-pulse 3s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .user-avatar { animation: none; }
 }
 
 .user-details h3 {
@@ -266,29 +377,36 @@
 }
 
 /* ---------- Entrance animation ---------- */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 .fade-in {
   animation: fadeInUp 0.45s ease both;
 }
 
 /* ---------- Quick Actions ---------- */
 .quick-actions-label {
+  position: relative;
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.4);
   margin: 2rem 0 1rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.quick-actions-label::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  background: #a78bfa;
+  box-shadow: 0 0 6px rgba(167, 139, 250, 0.9);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quick-actions-label::before { animation: none; }
 }
 
 .quick-actions-grid {
@@ -308,7 +426,7 @@
   padding: 1.25rem;
   text-decoration: none;
   color: inherit;
-  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.18s ease, background 0.18s ease, box-shadow 0.22s ease;
   overflow: hidden;
 }
 
@@ -322,14 +440,36 @@
   pointer-events: none;
 }
 
+.quick-action-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 30%;
+  height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.07), transparent);
+  transform: translateX(-150%) skewX(-12deg);
+  pointer-events: none;
+}
+
 .quick-action-card:hover {
-  transform: translateY(-3px);
+  transform: translateY(-4px);
   border-color: color-mix(in srgb, var(--accent, #3b82f6) 50%, transparent);
   background: rgba(255, 255, 255, 0.05);
+  box-shadow: 0 18px 34px -16px color-mix(in srgb, var(--accent, #3b82f6) 45%, transparent);
 }
 
 .quick-action-card:hover::before {
   opacity: 0.06;
+}
+
+.quick-action-card:hover::after {
+  animation: scan-sweep 0.9s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quick-action-card, .quick-action-card:hover { transition: none; transform: none; }
+  .quick-action-card:hover::after { animation: none; }
 }
 
 .quick-action-icon {
@@ -342,6 +482,11 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.quick-action-card:hover .quick-action-icon {
+  transform: scale(1.1) rotate(-4deg);
 }
 
 .quick-action-card h4 {
@@ -368,7 +513,7 @@
 }
 
 .quick-action-card:hover .quick-action-arrow {
-  transform: translateX(3px);
+  transform: translateX(4px);
   color: var(--accent, #3b82f6);
 }
 
@@ -381,6 +526,7 @@
 }
 
 .stat-card {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.9rem;
@@ -388,6 +534,32 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0.85rem;
   padding: 1.1rem 1.25rem;
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.18s ease, box-shadow 0.2s ease;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent, #3b82f6), transparent);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--accent, #3b82f6) 45%, transparent);
+  box-shadow: 0 14px 28px -14px color-mix(in srgb, var(--accent, #3b82f6) 40%, transparent);
+}
+
+.stat-card:hover::before {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stat-card, .stat-card:hover { transition: none; transform: none; }
 }
 
 .stat-icon {
@@ -400,6 +572,7 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent, #3b82f6) 25%, transparent) inset;
 }
 
 .stat-value {
@@ -407,6 +580,7 @@
   font-weight: 800;
   color: #fff;
   line-height: 1.1;
+  animation: count-in 0.4s ease both;
 }
 
 .stat-label {
@@ -443,7 +617,6 @@
 
 /* ===================== Responsive breakpoints ===================== */
 
-/* Tablet */
 @media (max-width: 1024px) {
   .dashboard-sidebar {
     width: 220px;
@@ -454,7 +627,6 @@
   }
 }
 
-/* Mobile: sidebar becomes an off-canvas drawer */
 @media (max-width: 768px) {
   .dashboard-sidebar {
     position: fixed;
@@ -562,7 +734,6 @@
   }
 }
 
-/* Small phones */
 @media (max-width: 400px) {
   .stats-grid {
     grid-template-columns: 1fr;

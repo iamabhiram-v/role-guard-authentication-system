@@ -20,7 +20,7 @@ export class ProfileService {
   async getProfile(userId: string) {
     const result = await db.query(
       `SELECT id, email, username, full_name, bio, avatar_url, phone, role,
-              is_active, last_login, created_at, updated_at
+              is_active, last_login, created_at, updated_at, two_fa_enabled
        FROM users WHERE id = $1`,
       [userId]
     );
@@ -92,7 +92,8 @@ export class ProfileService {
     values.push(userId);
 
     const query = `UPDATE users SET ${fields.join(', ')} WHERE id = $${idx}
-                    RETURNING id, email, username, full_name, bio, avatar_url, phone, role, updated_at`;
+                    RETURNING id, email, username, full_name, bio, avatar_url, phone, role,
+                              is_active, last_login, created_at, updated_at`;
 
     const result = await db.query(query, values);
     return result.rows[0];
@@ -128,6 +129,18 @@ export class ProfileService {
     );
 
     return { message: 'Password changed successfully. Please log in again.' };
+  }
+
+  async toggle2FA(userId: string, enabled: boolean) {
+    const result = await db.query(
+      `UPDATE users SET two_fa_enabled = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+       RETURNING id, email, username, full_name, bio, avatar_url, phone, role,
+                 is_active, last_login, created_at, updated_at, two_fa_enabled`,
+      [enabled, userId]
+    );
+    if (result.rows.length === 0) throw new NotFoundError('User not found');
+    return result.rows[0];
   }
 
   async deleteAccount(userId: string, password: string) {
