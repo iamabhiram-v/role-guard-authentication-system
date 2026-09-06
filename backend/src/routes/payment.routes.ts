@@ -9,8 +9,7 @@ router.use(authMiddleware);
 router.post('/orders', (req, res, next) => paymentController.createOrder(req, res, next));
 router.post('/verify', (req, res, next) => paymentController.verifyPayment(req, res, next));
 
-// Webhook is unauthenticated — Razorpay posts here directly.
-// Body is captured as raw text so HMAC can be verified before parsing.
+
 router.post(
   '/webhook',
   (req: Request, res: Response, next: NextFunction) => {

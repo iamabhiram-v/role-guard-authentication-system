@@ -22,12 +22,20 @@ import { razorpayService } from './services/razorpay.service';
 import uploadRoutes from './routes/upload.routes';
 import oauthRoutes from './routes/oauth.routes';
 import paymentRoutes from './routes/payment.routes';
+import healthRoutes from './config/health';
+import { env, validateEnv } from './config/env';
+import { logger, requestLogger } from './config/logger';
+
 
 dotenv.config();
 
+// Fail fast in production if required secrets/config are missing, rather
+// than starting up in a broken state.
+validateEnv();
+
 const app: Express = express();
 const httpServer = createServer(app);
-const PORT = process.env.PORT || 3000;
+const PORT = env.PORT;
 
 const allowedOrigins = [
   'http://localhost:5173',
@@ -50,6 +58,7 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+app.use(requestLogger);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
@@ -65,6 +74,7 @@ app.use('/api/service-status', serviceStatusRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/auth/oauth', oauthRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/health', healthRoutes);
 app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
@@ -77,7 +87,7 @@ app.use((req: Request, res: Response) => {
 });
 
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-  console.error(err);
+  logger.error(err.message, { stack: err.stack, path: req.originalUrl, method: req.method });
 
   if (err instanceof AppError) {
     res.status(err.statusCode).json({
@@ -96,23 +106,38 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 initSocket(httpServer);
 
 httpServer.listen(PORT, () => {
-  console.log(`✅ RoleGuard Server running on http://localhost:${PORT}`);
-  console.log(`📝 Health check: http://localhost:${PORT}/health`);
-  console.log(`🔐 API: http://localhost:${PORT}/api/auth`);
-  console.log(`👤 Profile API: http://localhost:${PORT}/api/profile`);
-  console.log(`🏢 Workspace API: http://localhost:${PORT}/api/workspaces`);
-  console.log(`📦 Queue API: http://localhost:${PORT}/api/queue`);
-  console.log(`🔔 Notifications API: http://localhost:${PORT}/api/notifications`);
-  console.log(`⚙️  Notification Preferences API: http://localhost:${PORT}/api/notification-preferences`);
-  console.log(`🔇 Notification Mute API: http://localhost:${PORT}/api/notification-mute`);
-  console.log(`📣 Announcements API: http://localhost:${PORT}/api/announcements`);
-  console.log(`🔕 Push Subscriptions API: http://localhost:${PORT}/api/push-subscriptions`);
-  console.log(`📊 Dashboard API: http://localhost:${PORT}/api/dashboard`);
-  console.log(`🩺 Service Status API: http://localhost:${PORT}/api/service-status`);
-  console.log(`🔐 OAuth API: http://localhost:${PORT}/api/auth/oauth/google`);
-  console.log(`💳 Payments API: http://localhost:${PORT}/api/payments`);
-  console.log(`🔌 Socket.IO: real-time collaboration active`);
+  logger.info(`RoleGuard server started`, {
+    port: PORT,
+    env: env.NODE_ENV,
+    endpoints: {
+      health: `/health`,
+      liveness: `/health/live`,
+      readiness: `/health/ready`,
+      auth: `/api/auth`,
+      profile: `/api/profile`,
+      workspaces: `/api/workspaces`,
+      queue: `/api/queue`,
+      notifications: `/api/notifications`,
+      announcements: `/api/announcements`,
+      dashboard: `/api/dashboard`,
+      serviceStatus: `/api/service-status`,
+      oauth: `/api/auth/oauth/google`,
+      payments: `/api/payments`,
+    },
+  });
+  logger.info('Socket.IO real-time collaboration active');
   startWorker();
   startScheduler();
-  razorpayService.init().catch((err) => console.error('Razorpay init failed:', err));
+  razorpayService.init().catch((err) => logger.error('Razorpay init failed', { error: err instanceof Error ? err.message : err }));
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled promise rejection', { reason: reason instanceof Error ? reason.stack : reason });
+});
+
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught exception', { error: err.message, stack: err.stack });
+  if (env.isProduction) {
+    process.exit(1);
+  }
 });

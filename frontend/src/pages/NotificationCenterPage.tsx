@@ -139,7 +139,7 @@ export const NotificationCenterPage: React.FC = () => {
 
   useEffect(() => {
     dispatch(fetchNotificationHistory({ filter, page: pagination.page }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [dispatch, filter, pagination.page]);
 
   const handleFilterChange = (newFilter: 'all' | 'unread') => {

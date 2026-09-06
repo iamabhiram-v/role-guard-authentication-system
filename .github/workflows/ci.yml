@@ -1,80 +1,73 @@
-name: RoleGuard CI
+name: CI
 
 on:
   push:
-    branches:
-      - main
-      - develop
-
+    branches: [main, develop]
   pull_request:
-    branches:
-      - main
-      - develop
+    branches: [main, develop]
 
 jobs:
   backend:
-    name: Backend CI
     runs-on: ubuntu-latest
-
     defaults:
       run:
         working-directory: backend
-
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: "22"
+          cache: "npm"
           cache-dependency-path: backend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
-      - name: TypeScript build
+      - name: Type-check & build
         run: npm run build
 
+      # No test script exists yet in package.json — once one is added
+      # (`npm test`), uncomment this so CI actually runs it.
+      # - name: Run tests
+      #   run: npm test
+
+      - name: Docker build (smoke test)
+        run: docker build -t roleguard-backend:ci .
 
   frontend:
-    name: Frontend CI
     runs-on: ubuntu-latest
-
     defaults:
       run:
         working-directory: frontend
-
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: "22"
+          cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build frontend
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check & build
         run: npm run build
+        env:
+          VITE_API_URL: https://api.example.com/api
+          VITE_RAZORPAY_KEY_ID: rzp_test_placeholder
 
-
-  docker:
-    name: Docker Build
-    runs-on: ubuntu-latest
-
-    needs:
-      - backend
-      - frontend
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Build backend Docker image
-        run: docker build -t roleguard-backend ./backend
+      - name: Docker build (smoke test)
+        run: |
+          docker build \
+            --build-arg VITE_API_URL=https://api.example.com/api \
+            --build-arg VITE_RAZORPAY_KEY_ID=rzp_test_placeholder \
+            -t roleguard-frontend:ci .

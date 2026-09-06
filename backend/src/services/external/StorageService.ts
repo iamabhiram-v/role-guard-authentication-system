@@ -7,7 +7,7 @@ import crypto from 'crypto';
 export interface UploadInput {
   buffer: Buffer;
   contentType: string;
-  folder: string; // e.g. 'avatars'
+  folder: string; 
 }
 
 export class StorageService extends ExternalService {

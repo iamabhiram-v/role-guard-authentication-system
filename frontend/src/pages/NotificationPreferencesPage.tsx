@@ -85,7 +85,6 @@ const Toggle: React.FC<{
         transition: 'background 0.2s ease',
         flexShrink: 0,
         padding: 0,
-        // @ts-ignore custom property for the glow keyframe
         '--toggle-color': color,
       } as React.CSSProperties}
       onFocus={(e) => {
@@ -341,13 +340,15 @@ export const NotificationPreferencesPage: React.FC = () => {
               </span>
             </div>
 
-            {items.map((pref, idx) => {
+            {items
+              .filter((pref) => pref.category !== 'payment')
+              .map((pref, idx, filteredItems) => {
               const meta = CATEGORY_META[pref.category] || {
                 label: pref.category,
                 description: '',
                 icon: null,
               };
-              const isLast = idx === items.length - 1;
+              const isLast = idx === filteredItems.length - 1;
 
               return (
                 <div

@@ -1,13 +1,14 @@
 node_modules/
 dist/
-dist-ssr/
+logs/
 
 .env
 .env.*
 !.env.example
-
-*.local
-*.tsbuildinfo
+!.env.production.example
 
 npm-debug.log*
+*.log
+
+coverage/
 .DS_Store
