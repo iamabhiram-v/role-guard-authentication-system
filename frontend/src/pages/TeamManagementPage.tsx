@@ -7,7 +7,8 @@ import { Toast } from '../components/Toast';
 import { OnlineUserList } from '../components/OnlineUserList';
 import { TypingIndicator } from '../components/TypingIndicator';
 import { ActivityFeed } from '../components/ActivityFeed';
-import { useSocket } from '../hooks/useSocket';
+import { ChatBox } from '../components/ChatBox';
+import { useSocketActions } from '../hooks/useSocketActions';
 import {
   fetchWorkspace,
   fetchMembers,
@@ -59,7 +60,7 @@ export const TeamManagementPage: React.FC = () => {
     (state: RootState) => state.workspace
   );
 
-  const { joinRoom, leaveRoom, startTyping, stopTyping, broadcastActivity } = useSocket();
+  const { joinRoom, leaveRoom, startTyping, stopTyping, broadcastActivity } = useSocketActions();
 
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin' | 'member'>('member');
@@ -284,6 +285,13 @@ export const TeamManagementPage: React.FC = () => {
         <div style={{ flex: '1 1 320px', minWidth: '300px', position: 'sticky', top: '1.5rem' }}>
           <OnlineUserList workspaceId={workspaceId} />
           <ActivityFeed workspaceId={workspaceId} />
+
+          <div style={{ marginTop: '1rem', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', overflow: 'hidden' }}>
+            <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.08)', fontWeight: 700, fontSize: '0.85rem' }}>
+              Team Chat
+            </div>
+            <ChatBox workspaceId={workspaceId} />
+          </div>
         </div>
       </div>
 

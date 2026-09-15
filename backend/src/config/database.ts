@@ -12,7 +12,7 @@ export const pool = new Pool({
   database: process.env.DB_NAME,
 });
 
-// Alias so any file importing { db } also works
+
 export const db = pool;
 
 pool.on('connect', () => {

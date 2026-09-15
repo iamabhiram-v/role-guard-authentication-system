@@ -5,7 +5,7 @@ import './TypingIndicator.css';
 
 interface TypingIndicatorProps {
   workspaceId: string;
-  context?: string; // optional: only show typing users for a specific context (e.g. a specific doc/thread)
+  context?: string; 
 }
 
 export const TypingIndicator: React.FC<TypingIndicatorProps> = ({ workspaceId, context }) => {

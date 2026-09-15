@@ -73,6 +73,17 @@ export class ProfileController {
         }
       }
 
+      // In-app + push notification, alongside the email above.
+      try {
+        await queueService.enqueue('notification', {
+          userId,
+          title: 'Profile updated',
+          message: "Your profile information was just updated. If this wasn't you, secure your account.",
+        });
+      } catch (notifyErr) {
+        console.error('Failed to queue profile update in-app notification:', notifyErr);
+      }
+
       res.status(200).json({ status: 'success', message: 'Profile updated', data: updated });
     } catch (err) {
       next(err);
@@ -100,6 +111,17 @@ export class ProfileController {
         } catch (notifyErr) {
           console.error('Failed to queue password change notification:', notifyErr);
         }
+      }
+
+      // In-app + push notification, alongside the email above.
+      try {
+        await queueService.enqueue('notification', {
+          userId,
+          title: 'Password changed',
+          message: 'Your account password was just changed. If this was not you, contact support immediately.',
+        });
+      } catch (notifyErr) {
+        console.error('Failed to queue password change in-app notification:', notifyErr);
       }
 
       res.status(200).json({ status: 'success', message: result.message });

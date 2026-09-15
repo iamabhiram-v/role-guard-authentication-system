@@ -44,12 +44,14 @@
     "socket.io": "^4.8.3",
     "twilio": "^6.0.2",
     "typescript": "^5.3.3",
+    "web-push": "^3.6.7",
     "winston": "^3.19.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/multer": "^2.2.0",
     "@types/pdfkit": "^0.17.6",
+    "@types/web-push": "^3.6.4",
     "nodemon": "^3.1.0",
     "ts-node": "^10.9.2"
   }

@@ -25,12 +25,11 @@ import paymentRoutes from './routes/payment.routes';
 import healthRoutes from './config/health';
 import { env, validateEnv } from './config/env';
 import { logger, requestLogger } from './config/logger';
-
+import messageRoutes from './routes/message.routes';
 
 dotenv.config();
 
-// Fail fast in production if required secrets/config are missing, rather
-// than starting up in a broken state.
+
 validateEnv();
 
 const app: Express = express();
@@ -59,7 +58,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(requestLogger);
-
+app.use('/api/workspaces', messageRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/workspaces', workspaceRoutes);

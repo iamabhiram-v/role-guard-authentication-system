@@ -145,7 +145,16 @@ export const SettingsPage: React.FC = () => {
         <aside className="sp-sidebar">
           <div className="sp-profile-card">
             <div className="sp-avatar-wrap">
-              <div className="sp-avatar">{initials}</div>
+              <div
+                className="sp-avatar"
+                style={
+                  profile?.avatar_url
+                    ? { backgroundImage: `url(${profile.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' }
+                    : undefined
+                }
+              >
+                {!profile?.avatar_url && initials}
+              </div>
               <span className="sp-avatar-status" />
             </div>
             <div className="sp-user-meta">

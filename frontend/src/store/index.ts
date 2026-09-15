@@ -11,6 +11,7 @@ import presenceReducer from './slices/presenceSlice';
 import dashboardReducer from './slices/dashboardSlice';
 import serviceStatusReducer from './slices/serviceStatusSlice';
 import paymentReducer from './slices/paymentSlice';
+import messagesReducer from './slices/messagesSlice';
 export const store = configureStore({
   reducer: {
     auth: authReducer,
@@ -25,6 +26,7 @@ export const store = configureStore({
     dashboard: dashboardReducer,
     serviceStatus: serviceStatusReducer,
     payment: paymentReducer,
+    messages: messagesReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

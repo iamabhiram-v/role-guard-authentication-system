@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Socket } from 'socket.io-client';
 import { connectSocket, disconnectSocket } from '../services/socket';
 import { setConnected, setPresence, setTyping, addActivityEvent, resetPresence } from '../store/slices/presenceSlice';
+import { messageReceived } from '../store/slices/messagesSlice';
 import { fetchUnreadCount } from '../store/slices/NotificationSlice';
 import { AppDispatch, RootState } from '../store';
 
@@ -37,6 +38,10 @@ export const useSocket = () => {
       dispatch(addActivityEvent({ workspaceId: event.workspaceId, event }));
     });
 
+    socket.on('new-message', (message) => {
+      dispatch(messageReceived(message));
+    });
+
     // The backend now persists a real notification row when someone joins,
     // so we just refresh the unread badge count rather than pushing a
     // client-only notification that would get wiped by the next fetch/poll.
@@ -51,6 +56,7 @@ export const useSocket = () => {
       socket.off('presence-update');
       socket.off('typing-update');
       socket.off('activity-event');
+      socket.off('new-message');
       socket.off('user-joined');
     };
   }, [isAuthenticated, user?.id, dispatch]);
@@ -79,5 +85,13 @@ export const useSocket = () => {
     socketRef.current?.emit('activity-broadcast', { workspaceId, action, details });
   };
 
-  return { joinRoom, leaveRoom, startTyping, stopTyping, broadcastActivity };
+  const sendMessage = (workspaceId: string, message: string): Promise<{ success: boolean; message?: string }> => {
+    return new Promise((resolve) => {
+      socketRef.current?.emit('send-message', { workspaceId, message }, (res: { success: boolean; message?: string }) => {
+        resolve(res);
+      });
+    });
+  };
+
+  return { joinRoom, leaveRoom, startTyping, stopTyping, broadcastActivity, sendMessage };
 };

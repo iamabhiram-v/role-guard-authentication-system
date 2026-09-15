@@ -8,5 +8,6 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 *
 const router = Router();
 router.use(authMiddleware);
 router.post('/avatar', upload.single('file'), uploadController.uploadAvatar);
+router.post('/workspace/:workspaceId/icon', upload.single('file'), uploadController.uploadWorkspaceIcon);
 
 export default router;

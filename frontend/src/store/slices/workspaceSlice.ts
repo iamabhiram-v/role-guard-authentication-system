@@ -8,6 +8,7 @@ export interface Workspace {
   name: string;
   slug: string;
   description: string | null;
+  icon_url: string | null;
   owner_id: string;
   role: WorkspaceRole;
   member_count: number;
@@ -125,6 +126,24 @@ export const updateWorkspace = createAsyncThunk(
       return res.data.data;
     } catch (err: any) {
       return rejectWithValue(errMsg(err, 'Failed to update workspace'));
+    }
+  }
+);
+
+export const uploadWorkspaceIcon = createAsyncThunk(
+  'workspace/uploadIcon',
+  async ({ workspaceId, file }: { workspaceId: string; file: File }, { rejectWithValue }) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await apiClient.post<{ data: { iconUrl: string; workspace: Workspace } }>(
+        `/upload/workspace/${workspaceId}/icon`,
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+      return res.data.data.workspace;
+    } catch (err: any) {
+      return rejectWithValue(errMsg(err, 'Failed to upload workspace icon'));
     }
   }
 );
@@ -358,6 +377,19 @@ const workspaceSlice = createSlice({
         );
       })
       .addCase(updateWorkspace.rejected, (state, action) => {
+        state.error = action.payload as string;
+      })
+      // upload icon
+      .addCase(uploadWorkspaceIcon.fulfilled, (state, action: PayloadAction<Workspace>) => {
+        state.successMessage = 'Workspace icon updated';
+        if (state.currentWorkspace?.id === action.payload.id) {
+          state.currentWorkspace = { ...state.currentWorkspace, ...action.payload };
+        }
+        state.workspaces = state.workspaces.map((w) =>
+          w.id === action.payload.id ? { ...w, ...action.payload } : w
+        );
+      })
+      .addCase(uploadWorkspaceIcon.rejected, (state, action) => {
         state.error = action.payload as string;
       })
       // delete

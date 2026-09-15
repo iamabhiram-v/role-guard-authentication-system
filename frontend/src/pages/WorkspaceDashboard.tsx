@@ -24,8 +24,8 @@ import '../styles/workspace-dashboard.css';
 
 type FilterTab = 'all' | 'owned' | 'shared' | 'invited';
 
-// Deterministic icon + gradient per workspace — auto-assigned for visual
-// variety, not a user-chosen setting (no icon field exists in the schema).
+// Deterministic icon + gradient per workspace — used as a fallback when the
+// workspace has no uploaded icon_url yet.
 const iconSet = [
   { icon: '🚀', gradient: 'linear-gradient(135deg, #3b82f6, #2563eb)' },
   { icon: '⚙️', gradient: 'linear-gradient(135deg, #a78bfa, #7c3aed)' },
@@ -384,8 +384,15 @@ export const WorkspaceDashboard: React.FC = () => {
                     onClick={() => openWorkspace(ws)}
                   >
                     <div className="ws-card-top">
-                      <div className="ws-avatar" style={{ background: gradient }}>
-                        {icon}
+                      <div
+                        className="ws-avatar"
+                        style={
+                          ws.icon_url
+                            ? { backgroundImage: `url(${ws.icon_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+                            : { background: gradient }
+                        }
+                      >
+                        {!ws.icon_url && icon}
                       </div>
                       <CardMenu
                         workspace={ws}

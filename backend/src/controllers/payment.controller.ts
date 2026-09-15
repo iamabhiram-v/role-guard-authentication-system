@@ -89,6 +89,17 @@ export class PaymentController {
         // Already responded 200 to the client — just log, don't throw.
         console.error('[payment] Failed to enqueue confirmation email:', emailErr);
       }
+
+      // In-app + push notification, alongside the email above.
+      try {
+        await queueService.enqueue('notification', {
+          userId: req.user!.userId,
+          title: 'Payment received',
+          message: `We've received your payment. Payment ID: ${body.razorpay_payment_id}`,
+        });
+      } catch (notifyErr) {
+        console.error('[payment] Failed to enqueue in-app notification:', notifyErr);
+      }
     } catch (err) {
       next(err);
     }

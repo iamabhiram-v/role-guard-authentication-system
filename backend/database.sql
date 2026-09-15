@@ -1,15 +1,5 @@
--- ============================================================
--- RoleGuard - Complete PostgreSQL Database Schema
--- ============================================================
--- This schema matches the tables/columns used by the backend.
--- Designed for PostgreSQL 16 + Docker.
--- ============================================================
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
--- ============================================================
--- USERS
--- ============================================================
 
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -269,9 +259,6 @@ CREATE INDEX IF NOT EXISTS idx_jobs_created_by
     ON jobs(created_by);
 
 
--- ============================================================
--- NOTIFICATIONS
--- ============================================================
 
 CREATE TABLE IF NOT EXISTS notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -320,14 +307,7 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user_created
     ON notifications(user_id, created_at DESC);
 
 
--- ============================================================
--- NOTIFICATION PREFERENCES
--- IMPORTANT:
--- Backend expects:
--- email_enabled
--- in_app_enabled
--- sms_enabled
--- ============================================================
+
 
 CREATE TABLE IF NOT EXISTS notification_preferences (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -493,11 +473,6 @@ CREATE INDEX IF NOT EXISTS idx_announcements_created_at
 CREATE INDEX IF NOT EXISTS idx_announcements_created_by
     ON announcements(created_by);
 
-
--- ============================================================
--- ANNOUNCEMENT DISMISSALS
--- ============================================================
-
 CREATE TABLE IF NOT EXISTS announcement_dismissals (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
@@ -521,11 +496,6 @@ CREATE INDEX IF NOT EXISTS idx_announcement_dismissals_user
     ON announcement_dismissals(user_id);
 
 
--- ============================================================
--- PUSH SUBSCRIPTIONS
--- Backend expects p256dh_key + auth_key
--- ============================================================
-
 CREATE TABLE IF NOT EXISTS push_subscriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
@@ -545,9 +515,6 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
 );
 
 
--- ============================================================
--- Repair old push subscription column names
--- ============================================================
 
 DO $$
 BEGIN
@@ -601,9 +568,6 @@ CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id
     ON push_subscriptions(user_id);
 
 
--- ============================================================
--- WORKSPACES
--- ============================================================
 
 CREATE TABLE IF NOT EXISTS workspaces (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -633,9 +597,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_workspaces_slug
     ON workspaces(slug);
 
 
--- ============================================================
--- WORKSPACE MEMBERS
--- ============================================================
 
 CREATE TABLE IF NOT EXISTS workspace_members (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -666,9 +627,6 @@ CREATE INDEX IF NOT EXISTS idx_workspace_members_role
     ON workspace_members(role);
 
 
--- ============================================================
--- WORKSPACE INVITES
--- ============================================================
 
 CREATE TABLE IF NOT EXISTS workspace_invites (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -720,10 +678,6 @@ CREATE INDEX IF NOT EXISTS idx_workspace_invites_invited_by
     ON workspace_invites(invited_by);
 
 
--- ============================================================
--- FINAL DATA / DEFAULTS
--- ============================================================
-
 INSERT INTO worker_heartbeat (
     id,
     last_poll_at,
@@ -738,28 +692,3 @@ ON CONFLICT (id)
 DO NOTHING;
 
 
--- ============================================================
--- SCHEMA VERIFICATION
--- ============================================================
-
--- Expected application tables:
---
--- users
--- token_blacklist
--- auth_logs
--- account_deletions
--- worker_heartbeat
--- jobs
--- notifications
--- notification_preferences
--- notification_mute
--- announcements
--- announcement_dismissals
--- push_subscriptions
--- workspaces
--- workspace_members
--- workspace_invites
---
--- ============================================================
--- END
--- ============================================================

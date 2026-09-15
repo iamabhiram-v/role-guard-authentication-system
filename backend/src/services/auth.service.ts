@@ -6,6 +6,7 @@ import { generateTokens } from '../utils/jwt';
 import { processEmailJob } from './email.queue';
 import { queueService } from './queue.service';
 import { notificationPreferencesService } from './notificationPreferences.service';
+import { pushSubscriptionService } from './pushSubscription.service';
 
 const OTP_EXPIRY_MINUTES = 5;
 
@@ -174,7 +175,7 @@ export const userService = {
     return tokens;
   },
 
-  async logout(userId: string): Promise<void> {
+  async logout(userId: string, pushEndpoint?: string): Promise<void> {
     const result = await db.query('SELECT id, email, username FROM users WHERE id = $1', [userId]);
 
     if (result.rows.length === 0) {
@@ -182,6 +183,16 @@ export const userService = {
     }
 
     const user = result.rows[0];
+
+    // Remove this device's push subscription so a shared/public computer
+    // doesn't keep receiving push notifications for the account that just logged out.
+    if (pushEndpoint) {
+      try {
+        await pushSubscriptionService.unsubscribe(userId, pushEndpoint);
+      } catch (unsubErr) {
+        console.error('Failed to remove push subscription on logout:', unsubErr);
+      }
+    }
 
     try {
       const emailAllowed = await notificationPreferencesService.isChannelEnabled(user.id, 'general', 'email');

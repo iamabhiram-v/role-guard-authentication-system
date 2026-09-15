@@ -110,7 +110,7 @@ export const workspaceService = {
     return { ...result.rows[0], role: membership.role };
   },
 
-  async updateWorkspace(workspaceId: string, userId: string, data: { name?: string; description?: string }) {
+  async updateWorkspace(workspaceId: string, userId: string, data: { name?: string; description?: string; iconUrl?: string }) {
     await requireRole(workspaceId, userId, ['owner', 'admin']);
 
     const fields: string[] = [];
@@ -124,6 +124,10 @@ export const workspaceService = {
     if (data.description !== undefined) {
       fields.push(`description = $${idx++}`);
       values.push(data.description);
+    }
+    if (data.iconUrl !== undefined) {
+      fields.push(`icon_url = $${idx++}`);
+      values.push(data.iconUrl);
     }
 
     if (fields.length === 0) {

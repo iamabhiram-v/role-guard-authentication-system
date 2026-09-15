@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AppDispatch, RootState } from '../store';
@@ -8,6 +8,7 @@ import {
   fetchWorkspace,
   fetchMembers,
   updateWorkspace,
+  uploadWorkspaceIcon,
   deleteWorkspace,
   leaveWorkspace,
   transferOwnership,
@@ -15,6 +16,16 @@ import {
   clearWorkspaceSuccess,
 } from '../store/slices/workspaceSlice';
 import '../styles/workspace-dashboard.css';
+
+const ALLOWED_ICON_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_ICON_SIZE = 5 * 1024 * 1024; // 5MB
+
+const CameraIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" width="16" height="16">
+    <path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+    <circle cx="12" cy="14" r="3.2" stroke="currentColor" strokeWidth="1.6" />
+  </svg>
+);
 
 const CogIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" width="15" height="15">
@@ -58,6 +69,8 @@ export const WorkspaceSettings: React.FC = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [transferTargetId, setTransferTargetId] = useState('');
   const [showTransferModal, setShowTransferModal] = useState(false);
+  const [iconError, setIconError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -106,6 +119,29 @@ export const WorkspaceSettings: React.FC = () => {
     });
   };
 
+  const handleIconClick = () => {
+    setIconError(null);
+    fileInputRef.current?.click();
+  };
+
+  const handleIconChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file later
+    if (!file) return;
+
+    if (!ALLOWED_ICON_TYPES.includes(file.type)) {
+      setIconError('Only JPEG, PNG, or WebP images are allowed');
+      return;
+    }
+    if (file.size > MAX_ICON_SIZE) {
+      setIconError('Image must be under 5MB');
+      return;
+    }
+
+    setIconError(null);
+    dispatch(uploadWorkspaceIcon({ workspaceId, file }));
+  };
+
   const handleTransfer = () => {
     if (!transferTargetId) return;
     dispatch(transferOwnership({ workspaceId, newOwnerId: transferTargetId })).then((res: any) => {
@@ -127,6 +163,61 @@ export const WorkspaceSettings: React.FC = () => {
           </div>
         </div>
         <form onSubmit={handleSave} className="ws-profile-form">
+          {canEdit && (
+            <div className="ws-form-group">
+              <label>Icon</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem' }}>
+                <button
+                  type="button"
+                  className="ws-avatar"
+                  onClick={handleIconClick}
+                  disabled={isMutating}
+                  aria-label="Change workspace icon"
+                  style={{
+                    position: 'relative',
+                    width: '3.4rem',
+                    height: '3.4rem',
+                    border: 'none',
+                    cursor: 'pointer',
+                    ...(currentWorkspace.icon_url
+                      ? { backgroundImage: `url(${currentWorkspace.icon_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+                      : { background: 'linear-gradient(135deg, #60a5fa, #2563eb)' }),
+                  }}
+                >
+                  <span
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      borderRadius: '0.8rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'rgba(0,0,0,0.35)',
+                      color: '#fff',
+                      opacity: 0,
+                      transition: 'opacity 0.2s',
+                    }}
+                    className="ws-icon-upload-overlay"
+                  >
+                    <CameraIcon />
+                  </span>
+                </button>
+                <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)' }}>
+                  JPEG, PNG, or WebP — up to 5MB.
+                </span>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleIconChange}
+                style={{ display: 'none' }}
+              />
+              {iconError && (
+                <p style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: '0.3rem' }}>{iconError}</p>
+              )}
+            </div>
+          )}
           <div className="ws-form-group">
             <label>Name</label>
             <input

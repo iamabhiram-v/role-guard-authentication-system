@@ -20,6 +20,7 @@ import { PaymentPage } from './pages/PaymentPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { fetchCurrentUser } from './store/slices/authSlice';
 import { useSocket } from './hooks/useSocket';
+import { usePushSubscription } from './hooks/usePushSubscription';
 import { AppDispatch, RootState } from './store';
 
 const Unauthorized = () => (
@@ -75,6 +76,7 @@ function App() {
   const { isAuthenticated, isInitialized } = useSelector((state: RootState) => state.auth);
 
   useSocket(); // connects/disconnects the real-time socket based on isAuthenticated
+  usePushSubscription(); // registers service worker + subscribes to push once logged in
 
   useEffect(() => {
     // Reads the session from the httpOnly cookie automatically —

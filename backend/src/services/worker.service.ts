@@ -1,25 +1,14 @@
 import { Worker, Job } from 'bullmq';
 import { db } from '../config/database';
 import { queueService } from './queue.service';
-import { emailService } from './external/EmailService';
 import { smsService } from './external/SmsService';
 import { notificationPreferencesService } from './notificationPreferences.service';
 import { redisConnection } from '../config/redis';
 import { jobQueue } from '../config/bullQueue';
+import { processEmailJob } from './email.queue';
+import { processNotificationJob } from './notification.queue';
 
 let worker: Worker | null = null;
-
-const processEmailJob = async (payload: any) => {
-  const { to, subject, html, body } = payload;
-  if (!to || !subject) {
-    throw new Error('Email job payload missing "to" or "subject"');
-  }
-
-  const result = await emailService.send({ to, subject, body: body ?? html });
-  if (!result.success) {
-    throw new Error(result.error || 'Email send failed');
-  }
-};
 
 const processSmsJob = async (payload: any) => {
   const { to, message } = payload;
@@ -31,19 +20,6 @@ const processSmsJob = async (payload: any) => {
   if (!result.success) {
     throw new Error(result.error || 'SMS send failed');
   }
-};
-
-const processNotificationJob = async (payload: any) => {
-  const { userId, title, message } = payload;
-  if (!userId || !title) {
-    throw new Error('Notification job payload missing "userId" or "title"');
-  }
-
-  await db.query(
-    `INSERT INTO notifications (user_id, title, message)
-     VALUES ($1, $2, $3)`,
-    [userId, title, message || null]
-  );
 };
 
 const processors: Record<string, (payload: any) => Promise<void>> = {

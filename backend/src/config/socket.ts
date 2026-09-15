@@ -3,6 +3,7 @@ import { Server as HTTPServer } from 'http';
 import { verifyAccessToken } from '../utils/jwt';
 import { db } from './database';
 import { queueService } from '../services/queue.service';
+import { messageService } from '../services/message.service';
 
 type AuthenticatedSocket = Socket & {
   userId?: string;
@@ -201,6 +202,43 @@ export const initSocket = (httpServer: HTTPServer) => {
         isTyping: false,
       });
     });
+
+    // --- Chat ---
+    socket.on(
+      'send-message',
+      async (
+        { workspaceId, message }: { workspaceId: string; message: string },
+        callback?: (res: { success: boolean; message?: string }) => void
+      ) => {
+        try {
+          if (!workspaceId || !socket.userId || !message) {
+            callback?.({ success: false, message: 'Invalid request' });
+            return;
+          }
+
+          const saved = await messageService.createMessage(workspaceId, socket.userId, message);
+
+          // Broadcast to everyone in the room, including the sender — this
+          // keeps the sender's own UI in sync with the exact saved/trimmed
+          // version rather than trusting the client's local optimistic copy.
+          io.to(workspaceId).emit('new-message', saved);
+
+          // A message counts as activity too — stop showing "typing" for this user.
+          typingUsers.get(workspaceId)?.delete(socket.userId);
+          socket.to(workspaceId).emit('typing-update', {
+            workspaceId,
+            userId: socket.userId,
+            email: socket.email,
+            isTyping: false,
+          });
+
+          callback?.({ success: true });
+        } catch (err: any) {
+          console.error('send-message error:', err);
+          callback?.({ success: false, message: err.message || 'Failed to send message' });
+        }
+      }
+    );
 
     // --- Activity Broadcasting ---
     socket.on(

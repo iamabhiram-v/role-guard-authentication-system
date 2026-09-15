@@ -56,6 +56,16 @@ const CATEGORY_META: Record<string, { label: string; description: string; icon: 
       </svg>
     ),
   },
+  payment: {
+    label: 'Payments',
+    description: 'Receipts, renewals, and billing issues.',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="1" y="4" width="22" height="16" rx="2" />
+        <line x1="1" y1="10" x2="23" y2="10" />
+      </svg>
+    ),
+  },
 };
 
 const Toggle: React.FC<{
@@ -117,6 +127,13 @@ export const NotificationPreferencesPage: React.FC = () => {
   const { items, isLoading, isSaving, error, successMessage } = useSelector(
     (state: RootState) => state.notificationPreferences
   );
+  const { user } = useSelector((state: RootState) => state.auth);
+  const isAdmin = user?.role === 'admin';
+
+  // "Job Failures" alerts are only ever sent to admins (see worker.service.ts),
+  // so showing this toggle to regular users is misleading — it would never fire for them.
+  const visibleItems = items.filter((pref) => isAdmin || pref.category !== 'job_failure');
+
   const {
     isSubscribed,
     isLoading: isPushLoading,
@@ -340,15 +357,13 @@ export const NotificationPreferencesPage: React.FC = () => {
               </span>
             </div>
 
-            {items
-              .filter((pref) => pref.category !== 'payment')
-              .map((pref, idx, filteredItems) => {
+            {visibleItems.map((pref, idx) => {
               const meta = CATEGORY_META[pref.category] || {
                 label: pref.category,
                 description: '',
                 icon: null,
               };
-              const isLast = idx === filteredItems.length - 1;
+              const isLast = idx === visibleItems.length - 1;
 
               return (
                 <div
