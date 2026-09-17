@@ -206,7 +206,7 @@ function exportPdf(
     <thead><tr><th>ID</th><th>Type</th><th>Status</th><th>Attempts</th><th>Created</th><th>Error</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>
-  <script>window.onload = () => { window.print(); }<\/script>
+  <script>window.onload = () => { window.print(); }</script>
   </body></html>`;
 
   const win = window.open('', '_blank');
