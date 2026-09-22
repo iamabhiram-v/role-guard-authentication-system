@@ -4,7 +4,7 @@ import { userService } from '../services/auth.service';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { registerSchema, loginSchema } from '../validations/auth.validation';
 import { otpSchema } from '../validations/auth.validation';
-import { decodeToken } from '../utils/jwt';
+import { verifyRefreshToken } from '../utils/jwt';
 
 // Cross-domain cookies (Vercel frontend + Render backend) require
 // sameSite: 'none' paired with secure: true. In local dev, frontend and
@@ -175,9 +175,11 @@ export const authController = {
         return res.status(401).json({ status: 'error', message: 'Refresh token required' });
       }
 
-      const decoded = decodeToken(cookieToken);
-      if (!decoded) {
-        return res.status(401).json({ status: 'error', message: 'Invalid refresh token' });
+      let decoded;
+      try {
+        decoded = verifyRefreshToken(cookieToken);
+      } catch {
+        return res.status(401).json({ status: 'error', message: 'Invalid or expired refresh token' });
       }
 
       const tokens = await userService.refreshToken(decoded.userId);
