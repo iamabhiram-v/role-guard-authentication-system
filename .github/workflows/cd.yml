@@ -12,7 +12,92 @@ permissions:
   packages: write
 
 jobs:
+  # Boots the full docker-compose stack (postgres, redis, backend, frontend)
+  # from source and verifies the backend actually becomes reachable and
+  # reports its dependencies healthy — not just that each Dockerfile builds
+  # in isolation. backend/frontend publish only if this passes, so a broken
+  # compose wiring (env vars, depends_on, migrations) never reaches GHCR.
+  #
+  # Known limitation: this runs on a native-Linux GitHub Actions runner, not
+  # Docker Desktop on Windows/Mac, so it will not reproduce a host-proxy
+  # port-forwarding delay specific to Docker Desktop's VM networking layer.
+  # It does catch broken compose config, env-var/service wiring, and
+  # Postgres init-script failures, and it enforces a bounded retry/timeout
+  # readiness check as a standing pattern instead of an unbounded assumption
+  # that "healthy" means "reachable".
+  compose-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # backend/.env is gitignored and required by docker-compose.yml's
+      # `env_file: ./backend/.env` — without it, `docker compose up` fails
+      # before a single container starts. These are CI-only placeholder
+      # values (mirrors the placeholder pattern ci.yml already uses for
+      # VITE_API_URL/VITE_RAZORPAY_KEY_ID), never real secrets, and are
+      # only used inside this ephemeral runner.
+      - name: Write CI-only backend/.env
+        run: |
+          cat > backend/.env <<'EOF'
+          NODE_ENV=development
+          PORT=3000
+          DB_HOST=postgres
+          DB_PORT=5432
+          DB_NAME=postgres
+          DB_USER=postgres
+          DB_PASSWORD=postgres
+          POSTGRES_PASSWORD=postgres
+          REDIS_HOST=redis
+          REDIS_PORT=6379
+          JWT_SECRET=ci-only-access-secret
+          JWT_REFRESH_SECRET=ci-only-refresh-secret
+          JWT_EXPIRY=15m
+          JWT_REFRESH_EXPIRY=7d
+          CORS_ORIGIN=http://localhost
+          FRONTEND_URL=http://localhost
+          VAPID_PUBLIC_KEY=
+          VAPID_PRIVATE_KEY=
+          VAPID_SUBJECT=mailto:ci@example.com
+          EOF
+
+      - name: Build and start the stack
+        run: docker compose up -d --build
+        env:
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          DB_NAME: postgres
+          NODE_ENV: development
+          CORS_ORIGIN: http://localhost
+          VITE_API_URL: http://localhost:3000/api
+
+      - name: Wait for backend readiness (DB + Redis reachable)
+        run: |
+          timeout 90 bash -c '
+            until curl -sf http://localhost:3000/health/ready; do
+              echo "Waiting for backend readiness..."
+              sleep 2
+            done
+          '
+
+      - name: Verify frontend is serving
+        run: |
+          timeout 30 bash -c '
+            until curl -sf http://localhost/health; do
+              echo "Waiting for frontend..."
+              sleep 2
+            done
+          '
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
   backend:
+    needs: compose-integration
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,6 +129,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=backend
 
   frontend:
+    needs: compose-integration
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -76,3 +162,54 @@ jobs:
             VITE_RAZORPAY_KEY_ID=${{ secrets.VITE_RAZORPAY_KEY_ID }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
+
+  # Triggers Render to redeploy the backend service. Only runs for pushes to
+  # main (not version tags — a tag push is a release marker, not necessarily
+  # "redeploy prod this instant"), and only after compose-integration proves
+  # the stack boots correctly and the backend image itself built. Uses a
+  # Render Deploy Hook — a single-purpose, per-service trigger URL — rather
+  # than a Render API key, so this workflow has no ability to touch any
+  # other service or account-level setting.
+  #
+  # NOTE: verify in Render's dashboard whether this service actually builds
+  # from the ghcr.io image published by the `backend` job above, or builds
+  # natively from source (its Runtime showed "Node", not "Docker", which
+  # suggests the latter). Either way this hook triggers a real redeploy —
+  # it just may not be "redeploy using the image we built two jobs ago" if
+  # Render is building natively.
+  deploy-render:
+    needs: [compose-integration, backend]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy
+        run: |
+          if [ -z "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
+            echo "::error::RENDER_DEPLOY_HOOK_URL secret is not set. Add it in repo Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+
+      # A deploy hook only enqueues a deploy — it returns success immediately,
+      # before Render has even started building. Without this step, a build
+      # failure or crash-on-boot on Render's side would still show green here.
+      #
+      # LIMITATION (being explicit, not overselling this): this confirms the
+      # service is responding to HTTP after the trigger — it does NOT
+      # cryptographically confirm the NEW commit is what's serving traffic,
+      # because there's no version/commit-SHA endpoint in the app to check
+      # against. It also can't distinguish "new deploy is live" from "old
+      # instance was already up and never went down" if Render does a
+      # zero-downtime swap. A wrong/failed build that still lets the old
+      # instance keep serving would pass this check and NOT be caught.
+      # Real deploy-status verification requires Render's API (see the
+      # follow-up note below) — this is the safe-to-add-now version that
+      # needs no new secret beyond the deploy hook you already set up.
+      - name: Verify production responds after deploy
+        run: |
+          timeout 300 bash -c '
+            until curl -sf https://role-guard-authentication-system.onrender.com/health/live; do
+              echo "Waiting for production to respond post-deploy..."
+              sleep 5
+            done
+          '
