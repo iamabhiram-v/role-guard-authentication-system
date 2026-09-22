@@ -36,6 +36,16 @@ jobs:
       # values (mirrors the placeholder pattern ci.yml already uses for
       # VITE_API_URL/VITE_RAZORPAY_KEY_ID), never real secrets, and are
       # only used inside this ephemeral runner.
+      #
+      # VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY below are a real, validly-formatted
+      # ECDSA keypair (generated once via `webpush.generateVAPIDKeys()`) —
+      # not a live secret tied to any account, just throwaway values that
+      # satisfy the `web-push` library's key-format validation. It matters
+      # because `pushSubscription.service.ts` calls `setVapidDetails()` at
+      # module import time, which throws synchronously on an empty key and
+      # crashes the whole process before it ever reaches `app.listen()` —
+      # confirmed by reproducing the crash locally with an empty key and
+      # fixing it with a real keypair before this comment was written.
       - name: Write CI-only backend/.env
         run: |
           cat > backend/.env <<'EOF'
@@ -55,8 +65,8 @@ jobs:
           JWT_REFRESH_EXPIRY=7d
           CORS_ORIGIN=http://localhost
           FRONTEND_URL=http://localhost
-          VAPID_PUBLIC_KEY=
-          VAPID_PRIVATE_KEY=
+          VAPID_PUBLIC_KEY=BEfiiq7xDkxtj-Ccf0pgicUwaa0SxD419FmExb-QVEAjh2Fs9AKaBxpjaieb2pPBorCzzUMS2rpJfT1Q6I46yKk
+          VAPID_PRIVATE_KEY=20Z5py5JL2-QZhGBdsD2-_wUT6fm-uqWasGTqgzR3JM
           VAPID_SUBJECT=mailto:ci@example.com
           EOF
 
