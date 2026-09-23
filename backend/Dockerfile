@@ -18,7 +18,9 @@ RUN npm run build \
 
 # ---- Production runtime -----------------------------------------------------
 FROM node:22-alpine AS production
-ENV NODE_ENV=production
+ARG GIT_SHA=unknown
+ENV NODE_ENV=production \
+    GIT_SHA=${GIT_SHA}
 WORKDIR /app
 
 RUN apk add --no-cache libc6-compat curl \

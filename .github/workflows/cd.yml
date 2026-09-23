@@ -9,6 +9,10 @@ permissions:
   contents: read
   packages: write
 
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   # ── 1. Integration test ─────────────────────────────────────────────────────
   compose-integration:
@@ -119,13 +123,17 @@ jobs:
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=sha,prefix=
+            type=raw,value=${{ github.sha }}
 
       - uses: docker/build-push-action@v6
         with:
           context: ./backend
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
 
@@ -170,22 +178,32 @@ jobs:
     needs: [compose-integration, backend]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
     steps:
-      - name: Trigger Render deploy
+      - name: Trigger Render deploy of this exact image
         run: |
-          curl -fSs -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
-          echo "Deploy triggered"
+          curl -fSs -G --data-urlencode "imgURL=${IMAGE}" \
+            "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+          echo "Deploy triggered for ${IMAGE}"
 
-      - name: Wait for Render to go live
+      # Render's image-backed services don't auto-redeploy on a new push to a
+      # tag (see step above), and the old instance keeps answering
+      # /health/live while the new one builds — so this loop checks the
+      # `commit` field the app reports, not just a 200, to confirm the
+      # *new* build is actually the one serving traffic.
+      - name: Wait for the new commit to be live
         run: |
-          echo "Polling production health..."
+          echo "Polling production health for commit ${GITHUB_SHA}..."
           for i in $(seq 1 60); do
-            if curl -sf https://role-guard-authentication-system.onrender.com/health/live; then
-              echo "Render is live"
+            body="$(curl -sf https://role-guard-authentication-system.onrender.com/health/live || true)"
+            live_commit="$(echo "$body" | jq -r '.commit // empty')"
+            if [ "$live_commit" = "$GITHUB_SHA" ]; then
+              echo "Render is live on ${live_commit}"
               exit 0
             fi
-            echo "Attempt $i/60 — sleeping 5s"
+            echo "Attempt $i/60 — currently live: '${live_commit:-none}' — sleeping 5s"
             sleep 5
           done
-          echo "Render did not become healthy in time"
+          echo "Render did not converge on commit ${GITHUB_SHA} in time"
           exit 1

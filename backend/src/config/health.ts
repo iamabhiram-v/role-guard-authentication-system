@@ -8,6 +8,7 @@ const router = Router();
 router.get('/live', (_req: Request, res: Response) => {
   res.status(200).json({
     status: 'ok',
+    commit: process.env.GIT_SHA || 'unknown',
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
   });
