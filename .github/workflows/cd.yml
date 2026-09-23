@@ -181,10 +181,34 @@ jobs:
     env:
       IMAGE: ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
     steps:
+      - name: Validate deploy hook secret is configured
+        run: |
+          if [ -z "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
+            echo "::error::RENDER_DEPLOY_HOOK_URL secret is not set (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+
       - name: Trigger Render deploy of this exact image
         run: |
-          curl -fSs -G --data-urlencode "imgURL=${IMAGE}" \
-            "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+          http_code="$(curl -sS -G --data-urlencode "imgURL=${IMAGE}" \
+            -o /tmp/render_response.json -w '%{http_code}' \
+            "${{ secrets.RENDER_DEPLOY_HOOK_URL }}")"
+
+          echo "Render responded with HTTP ${http_code}"
+          echo "--- response body ---"
+          cat /tmp/render_response.json 2>/dev/null || true
+          echo "----------------------"
+
+          if [ "$http_code" != "200" ] && [ "$http_code" != "201" ]; then
+            echo "::error::Render rejected the deploy hook (HTTP ${http_code}) for image ${IMAGE}."
+            echo "::error::This is a Render-side configuration issue, not a workflow bug. Check, in order:"
+            echo "::error::  1) The service must be image-backed (Settings > 'Deploy an existing image from a registry'), not Git-backed. imgURL is only accepted by image-backed services."
+            echo "::error::  2) The image path configured on the service must exactly equal ghcr.io/${{ github.repository }}/backend — only the tag/digest may differ from what imgURL supplies."
+            echo "::error::  3) A registry credential for ghcr.io (classic GitHub PAT with read:packages scope) must be attached to the service so it can pull a private GHCR image."
+            echo "::error::  4) RENDER_DEPLOY_HOOK_URL must be the service's CURRENT hook URL — regenerating it in the Render dashboard invalidates the old one."
+            exit 1
+          fi
+
           echo "Deploy triggered for ${IMAGE}"
 
       # Render's image-backed services don't auto-redeploy on a new push to a
