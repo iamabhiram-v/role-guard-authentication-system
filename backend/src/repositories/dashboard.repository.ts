@@ -36,19 +36,6 @@ export const dashboardRepository = {
     return result.rows[0].total;
   },
 
-  async getTopByMemberCount(limit: number) {
-    const result = await db.query(
-      `SELECT w.id, w.name,
-              (SELECT COUNT(*) FROM workspace_members WHERE workspace_id = w.id)::int AS member_count,
-              w.created_at
-       FROM workspaces w
-       ORDER BY member_count DESC, w.created_at DESC
-       LIMIT $1`,
-      [limit]
-    );
-    return result.rows;
-  },
-
   async getActivityTimeline(days: number) {
     const result = await db.query(
       `

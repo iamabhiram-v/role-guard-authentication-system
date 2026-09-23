@@ -1,4 +1,4 @@
-import { Pool } from 'pg';
+import { Pool, PoolClient } from 'pg';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -12,8 +12,9 @@ export const pool = new Pool({
   database: process.env.DB_NAME,
 });
 
-
 export const db = pool;
+
+export type DbClient = PoolClient;
 
 pool.on('connect', () => {
   console.log('✅ Database connected');

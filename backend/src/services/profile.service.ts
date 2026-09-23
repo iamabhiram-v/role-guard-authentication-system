@@ -1,5 +1,6 @@
 import bcrypt from 'bcrypt';
 import { db } from '../config/database';
+import { userRepository, accountDeletionRepository } from '../repositories';
 import { NotFoundError, BadRequestError, UnauthorizedError } from '../utils/errors';
 
 interface UpdateProfileInput {
@@ -18,159 +19,77 @@ interface ChangePasswordInput {
 
 export class ProfileService {
   async getProfile(userId: string) {
-    const result = await db.query(
-      `SELECT id, email, username, full_name, bio, avatar_url, phone, role,
-              is_active, last_login, created_at, updated_at, two_fa_enabled
-       FROM users WHERE id = $1`,
-      [userId]
-    );
-
-    if (result.rows.length === 0) {
-      throw new NotFoundError('User profile not found');
-    }
-
-    return result.rows[0];
+    const user = await userRepository.findByIdWithProfile(userId);
+    if (!user) throw new NotFoundError('User profile not found');
+    return user;
   }
 
   async updateProfile(userId: string, data: UpdateProfileInput) {
     const existing = await this.getProfile(userId);
 
     if (data.username && data.username !== existing.username) {
-      const usernameCheck = await db.query(
-        `SELECT id FROM users WHERE username = $1 AND id != $2`,
-        [data.username, userId]
-      );
-      if (usernameCheck.rows.length > 0) {
-        throw new BadRequestError('Username already taken');
-      }
+      const taken = await userRepository.existsByUsernameExcluding(data.username, userId);
+      if (taken) throw new BadRequestError('Username already taken');
     }
 
     if (data.email && data.email !== existing.email) {
-      const emailCheck = await db.query(
-        `SELECT id FROM users WHERE email = $1 AND id != $2`,
-        [data.email, userId]
-      );
-      if (emailCheck.rows.length > 0) {
-        throw new BadRequestError('Email already in use');
-      }
+      const taken = await userRepository.existsByEmailExcluding(data.email, userId);
+      if (taken) throw new BadRequestError('Email already in use');
     }
 
     const fields: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
     let idx = 1;
 
-    if (data.username !== undefined) {
-      fields.push(`username = $${idx++}`);
-      values.push(data.username);
-    }
-    if (data.fullName !== undefined) {
-      fields.push(`full_name = $${idx++}`);
-      values.push(data.fullName);
-    }
-    if (data.email !== undefined) {
-      fields.push(`email = $${idx++}`);
-      values.push(data.email);
-    }
-    if (data.bio !== undefined) {
-      fields.push(`bio = $${idx++}`);
-      values.push(data.bio);
-    }
-    if (data.avatarUrl !== undefined) {
-      fields.push(`avatar_url = $${idx++}`);
-      values.push(data.avatarUrl);
-    }
-    if (data.phone !== undefined) {
-      fields.push(`phone = $${idx++}`);
-      values.push(data.phone);
-    }
+    if (data.username  !== undefined) { fields.push(`username = $${idx++}`);   values.push(data.username); }
+    if (data.fullName  !== undefined) { fields.push(`full_name = $${idx++}`);  values.push(data.fullName); }
+    if (data.email     !== undefined) { fields.push(`email = $${idx++}`);      values.push(data.email); }
+    if (data.bio       !== undefined) { fields.push(`bio = $${idx++}`);        values.push(data.bio); }
+    if (data.avatarUrl !== undefined) { fields.push(`avatar_url = $${idx++}`); values.push(data.avatarUrl); }
+    if (data.phone     !== undefined) { fields.push(`phone = $${idx++}`);      values.push(data.phone); }
 
-    if (fields.length === 0) {
-      throw new BadRequestError('No fields provided to update');
-    }
+    if (fields.length === 0) throw new BadRequestError('No fields provided to update');
 
     fields.push(`updated_at = CURRENT_TIMESTAMP`);
     values.push(userId);
 
-    const query = `UPDATE users SET ${fields.join(', ')} WHERE id = $${idx}
-                    RETURNING id, email, username, full_name, bio, avatar_url, phone, role,
-                              is_active, last_login, created_at, updated_at`;
-
-    const result = await db.query(query, values);
-    return result.rows[0];
+    return userRepository.updateProfile(userId, fields, values);
   }
 
   async changePassword(userId: string, data: ChangePasswordInput) {
-    const userResult = await db.query(
-      `SELECT password_hash FROM users WHERE id = $1`,
-      [userId]
-    );
+    const passwordHash = await userRepository.findPasswordHash(userId);
+    if (!passwordHash) throw new NotFoundError('User not found');
 
-    if (userResult.rows.length === 0) {
-      throw new NotFoundError('User not found');
-    }
+    const isValid = await bcrypt.compare(data.currentPassword, passwordHash);
+    if (!isValid) throw new UnauthorizedError('Current password is incorrect');
 
-    const { password_hash } = userResult.rows[0];
-    const isValid = await bcrypt.compare(data.currentPassword, password_hash);
-
-    if (!isValid) {
-      throw new UnauthorizedError('Current password is incorrect');
-    }
-
-    const isSamePassword = await bcrypt.compare(data.newPassword, password_hash);
-    if (isSamePassword) {
-      throw new BadRequestError('New password must be different from current password');
-    }
+    const isSame = await bcrypt.compare(data.newPassword, passwordHash);
+    if (isSame) throw new BadRequestError('New password must be different from current password');
 
     const newHash = await bcrypt.hash(data.newPassword, 12);
-
-    await db.query(
-      `UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
-      [newHash, userId]
-    );
+    await userRepository.updatePassword(userId, newHash);
 
     return { message: 'Password changed successfully. Please log in again.' };
   }
 
   async toggle2FA(userId: string, enabled: boolean) {
-    const result = await db.query(
-      `UPDATE users SET two_fa_enabled = $1, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $2
-       RETURNING id, email, username, full_name, bio, avatar_url, phone, role,
-                 is_active, last_login, created_at, updated_at, two_fa_enabled`,
-      [enabled, userId]
-    );
-    if (result.rows.length === 0) throw new NotFoundError('User not found');
-    return result.rows[0];
+    const user = await userRepository.toggle2FA(userId, enabled);
+    if (!user) throw new NotFoundError('User not found');
+    return user;
   }
 
   async deleteAccount(userId: string, password: string) {
-    const userResult = await db.query(
-      `SELECT email, password_hash FROM users WHERE id = $1`,
-      [userId]
-    );
+    const record = await userRepository.findEmailAndPasswordHash(userId);
+    if (!record) throw new NotFoundError('User not found');
 
-    if (userResult.rows.length === 0) {
-      throw new NotFoundError('User not found');
-    }
-
-    const { email, password_hash } = userResult.rows[0];
-    const isValid = await bcrypt.compare(password, password_hash);
-
-    if (!isValid) {
-      throw new UnauthorizedError('Password is incorrect');
-    }
+    const isValid = await bcrypt.compare(password, record.password_hash);
+    if (!isValid) throw new UnauthorizedError('Password is incorrect');
 
     const client = await db.connect();
     try {
       await client.query('BEGIN');
-
-      await client.query(
-        `INSERT INTO account_deletions (user_id, email) VALUES ($1, $2)`,
-        [userId, email]
-      );
-
-      await client.query(`DELETE FROM users WHERE id = $1`, [userId]);
-
+      await accountDeletionRepository.insert(client, userId, record.email);
+      await userRepository.delete(userId);
       await client.query('COMMIT');
     } catch (err) {
       await client.query('ROLLBACK');

@@ -1,4 +1,4 @@
-import { db } from '../config/database';
+import { notificationRepository } from '../repositories';
 
 interface GetNotificationsInput {
   userId: string;
@@ -11,23 +11,17 @@ export class NotificationService {
     const limit = 15;
     const currentPage = page ? Math.max(1, page) : 1;
     const offset = (currentPage - 1) * limit;
+    const onlyUnread = filter === 'unread';
 
-    const whereClause =
-      filter === 'unread' ? `WHERE user_id = $1 AND is_read = false` : `WHERE user_id = $1`;
-
-    const countResult = await db.query(
-      `SELECT COUNT(*)::int AS total FROM notifications ${whereClause}`,
-      [userId]
-    );
-    const total = countResult.rows[0]?.total || 0;
-
-    const result = await db.query(
-      `SELECT * FROM notifications ${whereClause} ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
-      [userId, limit, offset]
+    const { rows, total } = await notificationRepository.findPagedByUser(
+      userId,
+      onlyUnread,
+      limit,
+      offset
     );
 
     return {
-      notifications: result.rows,
+      notifications: rows,
       pagination: {
         page: currentPage,
         limit,
@@ -38,25 +32,15 @@ export class NotificationService {
   }
 
   async getUnreadCount(userId: string) {
-    const result = await db.query(
-      `SELECT COUNT(*)::int AS count FROM notifications WHERE user_id = $1 AND is_read = false`,
-      [userId]
-    );
-    return result.rows[0].count;
+    return notificationRepository.countUnread(userId);
   }
 
   async markAsRead(userId: string, notificationId: string) {
-    await db.query(
-      `UPDATE notifications SET is_read = true WHERE id = $1 AND user_id = $2`,
-      [notificationId, userId]
-    );
+    await notificationRepository.markOneRead(userId, notificationId);
   }
 
   async markAllAsRead(userId: string) {
-    await db.query(
-      `UPDATE notifications SET is_read = true WHERE user_id = $1 AND is_read = false`,
-      [userId]
-    );
+    await notificationRepository.markAllRead(userId);
   }
 }
 
