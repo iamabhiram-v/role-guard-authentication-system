@@ -1,7 +1,7 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import { verifyAccessToken } from '../utils/jwt';
-import { db } from './database';
+import { workspaceMemberRepository } from '../repositories';
 import { queueService } from '../services/queue.service';
 import { messageService } from '../services/message.service';
 
@@ -96,12 +96,9 @@ export const initSocket = (httpServer: HTTPServer) => {
             return;
           }
 
-          const membership = await db.query(
-            'SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2',
-            [workspaceId, socket.userId]
-          );
+          const membership = await workspaceMemberRepository.findMembership(workspaceId, socket.userId);
 
-          if (membership.rows.length === 0) {
+          if (!membership) {
             callback?.({ success: false, message: 'Not a member of this workspace' });
             return;
           }
@@ -138,16 +135,16 @@ export const initSocket = (httpServer: HTTPServer) => {
               // survives fetches/polling instead of being a Redux-only ghost
               // that gets wiped the moment fetchNotifications() runs.
               try {
-                const otherMembers = await db.query(
-                  'SELECT user_id FROM workspace_members WHERE workspace_id = $1 AND user_id != $2',
-                  [workspaceId, socket.userId]
+                const otherMemberIds = await workspaceMemberRepository.findOtherMemberUserIds(
+                  workspaceId,
+                  socket.userId
                 );
 
-                for (const row of otherMembers.rows) {
+                for (const memberId of otherMemberIds) {
                   await queueService.enqueue(
                     'notification',
                     {
-                      userId: row.user_id,
+                      userId: memberId,
                       title: 'Team member online',
                       message: `${socket.email} is now active in this workspace.`,
                     },

@@ -89,6 +89,47 @@ export const userRepository = {
     await db.query('UPDATE users SET last_login = NOW() WHERE id = $1', [id]);
   },
 
+  async updateLastLoginReturning(id: string): Promise<User> {
+    const result = await db.query(
+      'UPDATE users SET last_login = NOW() WHERE id = $1 RETURNING *',
+      [id]
+    );
+    return result.rows[0];
+  },
+
+  // password_hash is intentionally empty — OAuth users can't use password login.
+  async createOAuthUser(data: { email: string; username: string }): Promise<User> {
+    const result = await db.query(
+      `INSERT INTO users (email, username, password_hash, role, is_active, last_login, created_at, updated_at)
+       VALUES ($1, $2, $3, 'user', true, NOW(), NOW(), NOW())
+       RETURNING *`,
+      [data.email, data.username, '']
+    );
+    return result.rows[0];
+  },
+
+  async findActiveAdminsWithPhone(): Promise<{ id: string; phone: string }[]> {
+    const result = await db.query(
+      `SELECT id, phone FROM users WHERE role = 'admin' AND is_active = true AND phone IS NOT NULL`
+    );
+    return result.rows;
+  },
+
+  async findActiveWithUnreadCount(): Promise<
+    { id: string; email: string; username: string; unread_count: string }[]
+  > {
+    const result = await db.query(`
+      SELECT u.id, u.email, u.username,
+        (SELECT COUNT(*) FROM notifications n
+           WHERE n.user_id = u.id
+             AND n.is_read = false
+             AND n.created_at > NOW() - INTERVAL '1 day') AS unread_count
+      FROM users u
+      WHERE u.is_active = true
+    `);
+    return result.rows;
+  },
+
   async setOtp(id: string, otpHash: string, expiresAt: Date): Promise<void> {
     await db.query(
       'UPDATE users SET otp_code_hash = $1, otp_expires_at = $2 WHERE id = $3',

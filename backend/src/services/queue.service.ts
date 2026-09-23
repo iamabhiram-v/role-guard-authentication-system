@@ -1,4 +1,4 @@
-import { db } from '../config/database';
+import { jobRepository, workerHeartbeatRepository } from '../repositories';
 import { JobType } from '../types/job';
 import { jobQueue } from '../config/bullQueue';
 
@@ -19,13 +19,7 @@ export class QueueService {
     const { maxAttempts = 3, delayMs = 0, createdBy = null } = options;
     const scheduledAt = new Date(Date.now() + delayMs);
 
-    const result = await db.query(
-      `INSERT INTO jobs (type, payload, max_attempts, scheduled_at, created_by)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING *`,
-      [type, JSON.stringify(payload), maxAttempts, scheduledAt, createdBy]
-    );
-    const job = result.rows[0];
+    const job = await jobRepository.insert({ type, payload, maxAttempts, scheduledAt, createdBy });
 
     // jobId here ties the BullMQ job 1:1 to its Postgres row — the worker
     // uses this to load/update the right row. BullMQ's own `attempts`
@@ -46,13 +40,7 @@ export class QueueService {
   // them to BullMQ. This is a custom mechanism — BullMQ has no native
   // "hold a specific job" concept, only pause-the-whole-queue.
   async holdJob(jobId: string) {
-    const result = await db.query(
-      `UPDATE jobs SET is_held = true, updated_at = NOW()
-       WHERE id = $1 AND status = 'pending'
-       RETURNING *`,
-      [jobId]
-    );
-    const job = result.rows[0];
+    const job = await jobRepository.hold(jobId);
     if (!job) return null;
 
     const bullJob = await jobQueue.getJob(jobId);
@@ -62,13 +50,7 @@ export class QueueService {
   }
 
   async releaseJob(jobId: string) {
-    const result = await db.query(
-      `UPDATE jobs SET is_held = false, updated_at = NOW()
-       WHERE id = $1 AND status = 'pending'
-       RETURNING *`,
-      [jobId]
-    );
-    const job = result.rows[0];
+    const job = await jobRepository.release(jobId);
     if (!job) return null;
 
     await jobQueue.add(job.type, { dbJobId: job.id, payload: job.payload }, {
@@ -81,30 +63,18 @@ export class QueueService {
   }
 
   async markProcessing(jobId: string) {
-    await db.query(
-      `UPDATE jobs SET status = 'processing', started_at = NOW(), updated_at = NOW()
-       WHERE id = $1`,
-      [jobId]
-    );
+    await jobRepository.markProcessing(jobId);
   }
 
   async markCompleted(jobId: string) {
-    await db.query(
-      `UPDATE jobs SET status = 'completed', completed_at = NOW(), updated_at = NOW()
-       WHERE id = $1`,
-      [jobId]
-    );
+    await jobRepository.markCompleted(jobId);
   }
 
   async markFailed(jobId: string, error: string, attempts: number, maxAttempts: number) {
     const willRetry = attempts < maxAttempts;
     const status = willRetry ? 'pending' : 'failed';
 
-    await db.query(
-      `UPDATE jobs SET status = $1, error = $2, attempts = $3, updated_at = NOW()
-       WHERE id = $4`,
-      [status, error, attempts, jobId]
-    );
+    await jobRepository.markFailed(jobId, status, error, attempts);
   }
 
   // Manual retry from the dashboard — resets attempts and re-adds to
@@ -112,13 +82,7 @@ export class QueueService {
   // through Redis instead of just flipping status back to 'pending'
   // and waiting for the next poll.
   async retryJob(jobId: string) {
-    const result = await db.query(
-      `UPDATE jobs SET status = 'pending', scheduled_at = NOW(), error = NULL, attempts = 0, updated_at = NOW()
-       WHERE id = $1 AND status = 'failed'
-       RETURNING *`,
-      [jobId]
-    );
-    const job = result.rows[0];
+    const job = await jobRepository.resetFailedForRetry(jobId);
     if (!job) return null;
 
     const existing = await jobQueue.getJob(jobId);
@@ -134,46 +98,21 @@ export class QueueService {
   }
 
   async getJobs(filters: { status?: string; type?: string; limit?: number; offset?: number }) {
-    const conditions: string[] = [];
-    const values: any[] = [];
-    let idx = 1;
+    const { rows, total } = await jobRepository.findPaged({
+      status: filters.status,
+      type: filters.type,
+      limit: filters.limit || 50,
+      offset: filters.offset || 0,
+    });
 
-    if (filters.status) {
-      conditions.push(`status = $${idx++}`);
-      values.push(filters.status);
-    }
-    if (filters.type) {
-      conditions.push(`type = $${idx++}`);
-      values.push(filters.type);
-    }
-
-    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-    const limit = filters.limit || 50;
-    const offset = filters.offset || 0;
-
-    const countResult = await db.query(
-      `SELECT COUNT(*)::int AS total FROM jobs ${whereClause}`,
-      values
-    );
-    const total = countResult.rows[0]?.total || 0;
-
-    const result = await db.query(
-      `SELECT * FROM jobs ${whereClause}
-       ORDER BY created_at DESC
-       LIMIT $${idx} OFFSET $${idx + 1}`,
-      [...values, limit, offset]
-    );
-
-    return { jobs: result.rows, total };
+    return { jobs: rows, total };
   }
 
   async getStats() {
-    const result = await db.query(
-      `SELECT status, COUNT(*)::int as count FROM jobs GROUP BY status`
-    );
+    const rows = await jobRepository.countByStatus();
 
     const stats = { pending: 0, processing: 0, completed: 0, failed: 0 };
-    result.rows.forEach((row: any) => {
+    rows.forEach((row: any) => {
       stats[row.status as keyof typeof stats] = row.count;
     });
 
@@ -181,40 +120,21 @@ export class QueueService {
   }
 
   async getThroughput() {
-    const result = await db.query(
-      `SELECT
-         date_trunc('hour', COALESCE(completed_at, created_at)) AS hour,
-         COUNT(*) FILTER (WHERE status = 'completed')::int AS completed,
-         COUNT(*) FILTER (WHERE status = 'failed')::int AS failed
-       FROM jobs
-       WHERE COALESCE(completed_at, created_at) >= NOW() - INTERVAL '24 hours'
-       GROUP BY hour
-       ORDER BY hour ASC`
-    );
-    return result.rows;
+    return jobRepository.throughputLast24h();
   }
 
   // Now reflects BullMQ's real pause state instead of a Postgres flag
   // the worker had to poll for — see worker.service.ts pauseQueue/resumeQueue.
   async getHealth() {
-    const result = await db.query(`SELECT last_poll_at FROM worker_heartbeat WHERE id = 1`);
+    const lastPollAt = await workerHeartbeatRepository.findLastPollAt();
     const isPaused = await jobQueue.isPaused();
-    return { last_poll_at: result.rows[0]?.last_poll_at ?? null, is_paused: isPaused };
+    return { last_poll_at: lastPollAt, is_paused: isPaused };
   }
 
   async getLatencyStats() {
-    const result = await db.query(
-      `SELECT
-         EXTRACT(EPOCH FROM (completed_at - started_at)) AS duration_seconds
-       FROM jobs
-       WHERE status = 'completed'
-         AND started_at IS NOT NULL
-         AND completed_at IS NOT NULL
-         AND completed_at >= NOW() - INTERVAL '24 hours'
-       ORDER BY duration_seconds`
-    );
+    const rows = await jobRepository.completedDurationsLast24h();
 
-    const durations = result.rows.map((r: any) => Number(r.duration_seconds)).filter((n: number) => !isNaN(n));
+    const durations = rows.map((r: any) => Number(r.duration_seconds)).filter((n: number) => !isNaN(n));
     if (durations.length === 0) {
       return { p50: null, p95: null, avg: null, sampleSize: 0 };
     }

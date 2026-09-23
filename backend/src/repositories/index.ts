@@ -11,3 +11,4 @@ export { announcementRepository } from './announcement.repository';
 export { pushSubscriptionRepository } from './pushSubscription.repository';
 export { dashboardRepository } from './dashboard.repository';
 export { accountDeletionRepository } from './accountDeletion.repository';
+export { jobRepository, workerHeartbeatRepository } from './job.repository';
