@@ -2,15 +2,13 @@ import cron from 'node-cron';
 import { queueService } from './queue.service';
 import { notificationPreferencesService } from './notificationPreferences.service';
 import { pushSubscriptionService } from './pushSubscription.service';
-import { db } from '../config/database';
+import { jobRepository, userRepository } from '../repositories';
 
 export const startScheduler = () => {
   
   cron.schedule('0 2 * * *', async () => {
     console.log('🧹 Running scheduled cleanup task');
-    await db.query(
-      `DELETE FROM jobs WHERE status = 'completed' AND completed_at < NOW() - INTERVAL '7 days'`
-    );
+    await jobRepository.deleteCompletedOlderThan7Days();
   });
 
   // Re-engagement digest: nudges users who have unread activity in the last 24h,
@@ -21,17 +19,9 @@ export const startScheduler = () => {
   cron.schedule('0 9 * * *', async () => {
     console.log('📧 Enqueueing daily re-engagement digest');
 
-    const users = await db.query(`
-      SELECT u.id, u.email, u.username,
-        (SELECT COUNT(*) FROM notifications n
-           WHERE n.user_id = u.id
-             AND n.is_read = false
-             AND n.created_at > NOW() - INTERVAL '1 day') AS unread_count
-      FROM users u
-      WHERE u.is_active = true
-    `);
+    const users = await userRepository.findActiveWithUnreadCount();
 
-    for (const user of users.rows) {
+    for (const user of users) {
       const unreadCount = Number(user.unread_count);
 
       // Skip users with nothing new — avoids spamming inactive/idle accounts.

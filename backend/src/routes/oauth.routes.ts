@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { oauthService } from '../services/external/OAuthService';
-import { db } from '../config/database';
+import { userRepository } from '../repositories';
 import { generateTokens } from '../utils/jwt';
 
 const router = Router();
@@ -13,23 +13,13 @@ const cookieBase = {
 };
 
 async function findOrCreateOAuthUser(email: string, name: string, providerId: string) {
-  const existing = await db.query('SELECT * FROM users WHERE email = $1', [email]);
-  if (existing.rows.length > 0) {
-    const updated = await db.query(
-      'UPDATE users SET last_login = NOW() WHERE id = $1 RETURNING *',
-      [existing.rows[0].id]
-    );
-    return updated.rows[0];
+  const existing = await userRepository.findByEmail(email);
+  if (existing) {
+    return userRepository.updateLastLoginReturning(existing.id);
   }
 
   const username = name.replace(/\s+/g, '_').toLowerCase().slice(0, 30) + '_' + providerId.slice(-4);
-  const inserted = await db.query(
-    `INSERT INTO users (email, username, password_hash, role, is_active, last_login, created_at, updated_at)
-     VALUES ($1, $2, $3, 'user', true, NOW(), NOW(), NOW())
-     RETURNING *`,
-    [email, username, ''] // empty password_hash — OAuth users can't use password login
-  );
-  return inserted.rows[0];
+  return userRepository.createOAuthUser({ email, username });
 }
 
 function issueSessionAndRedirect(res: Response, user: any) {

@@ -149,6 +149,14 @@ export const workspaceMemberRepository = {
     return result.rows;
   },
 
+  async findOtherMemberUserIds(workspaceId: string, excludeUserId: string): Promise<string[]> {
+    const result = await db.query(
+      'SELECT user_id FROM workspace_members WHERE workspace_id = $1 AND user_id != $2',
+      [workspaceId, excludeUserId]
+    );
+    return result.rows.map((r) => r.user_id);
+  },
+
   async findWorkspaceIdsByUser(userId: string): Promise<string[]> {
     const result = await db.query(
       'SELECT workspace_id FROM workspace_members WHERE user_id = $1',

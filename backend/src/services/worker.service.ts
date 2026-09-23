@@ -1,5 +1,5 @@
 import { Worker, Job } from 'bullmq';
-import { db } from '../config/database';
+import { jobRepository, userRepository, workerHeartbeatRepository } from '../repositories';
 import { queueService } from './queue.service';
 import { smsService } from './external/SmsService';
 import { notificationPreferencesService } from './notificationPreferences.service';
@@ -29,11 +29,7 @@ const processors: Record<string, (payload: any) => Promise<void>> = {
 };
 
 const updateHeartbeat = async () => {
-  await db.query(
-    `INSERT INTO worker_heartbeat (id, last_poll_at)
-     VALUES (1, NOW())
-     ON CONFLICT (id) DO UPDATE SET last_poll_at = NOW()`
-  );
+  await workerHeartbeatRepository.touch();
 };
 
 export const pauseQueue = async (_userId: string) => {
@@ -47,9 +43,9 @@ export const resumeQueue = async () => {
 
 export const getQueueControlStatus = async () => {
   const isPaused = await jobQueue.isPaused();
-  const heartbeat = await db.query(`SELECT last_poll_at FROM worker_heartbeat WHERE id = 1`);
+  const lastPollAt = await workerHeartbeatRepository.findLastPollAt();
   return {
-    last_poll_at: heartbeat.rows[0]?.last_poll_at ?? null,
+    last_poll_at: lastPollAt,
     is_paused: isPaused,
     paused_by: null,
     paused_at: null,
@@ -60,8 +56,7 @@ async function runJob(job: Job) {
   const dbJobId: string = job.data.dbJobId;
   const type = job.name;
 
-  const jobRow = await db.query(`SELECT * FROM jobs WHERE id = $1`, [dbJobId]);
-  const dbJob = jobRow.rows[0];
+  const dbJob = await jobRepository.findById(dbJobId);
   if (!dbJob) {
 
     return;
@@ -86,10 +81,8 @@ async function handleJobFailedAlert(dbJobId: string, type: string, error: string
 
   if (attempts >= maxAttempts) {
     try {
-      const admins = await db.query(
-        `SELECT id, phone FROM users WHERE role = 'admin' AND is_active = true AND phone IS NOT NULL`
-      );
-      for (const admin of admins.rows) {
+      const admins = await userRepository.findActiveAdminsWithPhone();
+      for (const admin of admins) {
         const smsAllowed = await notificationPreferencesService.isChannelEnabled(admin.id, 'job_failure', 'sms');
         if (smsAllowed) {
           await smsService.send({

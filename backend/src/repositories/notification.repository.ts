@@ -1,6 +1,30 @@
 import { db } from '../config/database';
 
 export const notificationRepository = {
+  async existsRecentDuplicate(
+    userId: string,
+    title: string,
+    message: string,
+    windowMinutes: number
+  ): Promise<boolean> {
+    const result = await db.query(
+      `SELECT 1 FROM notifications
+       WHERE user_id = $1 AND title = $2 AND message = $3
+         AND created_at > NOW() - ($4 || ' minutes')::interval
+       LIMIT 1`,
+      [userId, title, message, windowMinutes]
+    );
+    return result.rows.length > 0;
+  },
+
+  async create(userId: string, title: string, message: string): Promise<void> {
+    await db.query(
+      `INSERT INTO notifications (user_id, title, message, created_at)
+       VALUES ($1, $2, $3, NOW())`,
+      [userId, title, message]
+    );
+  },
+
   async findPagedByUser(
     userId: string,
     onlyUnread: boolean,
